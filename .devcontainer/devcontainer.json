@@ -1,0 +1,15 @@
+{
+  "name": "NextCRM DevContainer",
+  "dockerComposeFile": ["../docker-compose.yml", "../docker-compose.override.yml"],
+  "service": "backend",
+  "workspaceFolder": "/workspace/CRM_Next",
+  "shutdownAction": "stopCompose",
+  "extensions": [
+    "ms-python.python",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-azuretools.vscode-docker"
+  ],
+  "postCreateCommand": "pip install -r backend/requirements/development.txt && npm install --prefix frontend"
+}
+
