@@ -28,7 +28,7 @@ def save_user_profile(sender, instance, **kwargs):
 def log_user_login_success(sender, request, user, **kwargs):
     """Log successful login attempts"""
     ip_address = get_client_ip(request)
-    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    user_agent = request.META.get('HTTP_USER_AGENT', '') if request else ''
     
     SecurityLog.objects.create(
         user=user,
@@ -36,7 +36,7 @@ def log_user_login_success(sender, request, user, **kwargs):
         ip_address=ip_address,
         user_agent=user_agent,
         metadata={
-            'session_key': request.session.session_key,
+            'session_key': request.session.session_key if request and hasattr(request, 'session') else None,
             'timestamp': timezone.now().isoformat(),
         }
     )
@@ -54,7 +54,7 @@ def log_user_logout(sender, request, user, **kwargs):
     """Log user logout"""
     if user:
         ip_address = get_client_ip(request)
-        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        user_agent = request.META.get('HTTP_USER_AGENT', '') if request else ''
         
         SecurityLog.objects.create(
             user=user,
@@ -71,8 +71,8 @@ def log_user_logout(sender, request, user, **kwargs):
 def log_user_login_failed(sender, credentials, request, **kwargs):
     """Log failed login attempts"""
     ip_address = get_client_ip(request)
-    user_agent = request.META.get('HTTP_USER_AGENT', '')
-    username = credentials.get('username', '')
+    user_agent = request.META.get('HTTP_USER_AGENT', '') if request else ''
+    username = credentials.get('username', '') if credentials else ''
     
     # Try to find the user
     user = None
@@ -97,9 +97,12 @@ def log_user_login_failed(sender, credentials, request, **kwargs):
 
 def get_client_ip(request):
     """Get client IP address from request"""
+    if request is None:
+        return None
+    
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(',')[0].strip()
     else:
         ip = request.META.get('REMOTE_ADDR')
-    return ip
+    return ip or None

@@ -203,9 +203,41 @@ SPECTACULAR_SETTINGS = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://0.0.0.0:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
 ]
 
+# Allow environment override for CORS origins
+cors_origins_env = config('CORS_ALLOWED_ORIGINS', default='')
+if cors_origins_env:
+    additional_origins = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+    CORS_ALLOWED_ORIGINS.extend(additional_origins)
+
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False
+
+# Additional CORS settings for better compatibility
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
 # Security Headers
 SECURE_CONTENT_TYPE_NOSNIFF = True

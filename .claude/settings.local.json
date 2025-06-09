@@ -5,7 +5,11 @@
       "Bash(docker:*)",
       "Bash(make:*)",
       "Bash(chmod:*)",
-      "Bash(./start-simple.sh:*)"
+      "Bash(./start-simple.sh:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(python manage.py:*)",
+      "Bash(python3 manage.py makemigrations:*)"
     ],
     "deny": []
   }

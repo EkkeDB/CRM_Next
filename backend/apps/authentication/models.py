@@ -75,7 +75,7 @@ class SecurityLog(models.Model):
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     event_type = models.CharField(max_length=25, choices=EVENT_TYPES)
-    ip_address = models.GenericIPAddressField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField()
     metadata = models.JSONField(default=dict)
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -108,7 +108,7 @@ class AuditLog(models.Model):
     object_id = models.CharField(max_length=50, blank=True)
     object_repr = models.CharField(max_length=200)
     changes = models.JSONField(default=dict)
-    ip_address = models.GenericIPAddressField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:

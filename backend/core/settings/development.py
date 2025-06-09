@@ -38,8 +38,16 @@ SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 
-# CORS settings for development
+# CORS settings for development - allow all origins
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+# Additional development-specific CORS settings
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+    r"^http://0\.0\.0\.0:\d+$",
+]
 
 # Logging for development
 LOGGING['handlers']['console']['level'] = 'DEBUG'
