@@ -310,11 +310,3 @@ export const referenceDataApi = {
 // Export the main API client
 export default apiClient
 
-// Export all APIs
-export {
-  authApi,
-  contractsApi,
-  counterpartiesApi,
-  commoditiesApi,
-  referenceDataApi,
-}
