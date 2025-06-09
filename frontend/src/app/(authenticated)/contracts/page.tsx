@@ -11,71 +11,16 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Eye, Trash2 } from 'lucide-react'
-import { apiClient } from '@/lib/api-client'
+import { contractsApi, counterpartiesApi, commoditiesApi, referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface Contract {
-  id: number
-  contract_number: string
-  counterparty: {
-    id: number
-    name: string
-  }
-  commodity: {
-    id: number
-    name: string
-  }
-  trader: {
-    id: number
-    name: string
-  }
-  quantity: string
-  price_per_unit: string
-  currency: {
-    id: number
-    code: string
-  }
-  delivery_date: string
-  status: string
-  trade_operation_type: {
-    id: number
-    name: string
-  }
-  created_at: string
-  updated_at: string
-}
-
-interface Counterparty {
-  id: number
-  name: string
-}
-
-interface Commodity {
-  id: number
-  name: string
-}
-
-interface Trader {
-  id: number
-  name: string
-}
-
-interface Currency {
-  id: number
-  code: string
-}
-
-interface TradeOperationType {
-  id: number
-  name: string
-}
+import type { Contract, Counterparty, Commodity, Trader, Currency, TradeOperationType } from '@/types'
 
 const CONTRACT_STATUSES = [
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'executed', label: 'Executed' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
 ]
 
 export default function ContractsPage() {
@@ -97,10 +42,10 @@ export default function ContractsPage() {
     commodity: '',
     trader: '',
     quantity: '',
-    price_per_unit: '',
-    currency: '',
-    delivery_date: '',
-    status: 'DRAFT',
+    price: '',
+    trade_currency: '',
+    date: '',
+    status: 'draft',
     trade_operation_type: '',
     notes: ''
   })
@@ -113,20 +58,20 @@ export default function ContractsPage() {
     try {
       setLoading(true)
       const [contractsRes, counterpartiesRes, commoditiesRes, tradersRes, currenciesRes, tradeTypesRes] = await Promise.all([
-        apiClient.get('/api/contracts/'),
-        apiClient.get('/api/counterparties/'),
-        apiClient.get('/api/commodities/'),
-        apiClient.get('/api/traders/'),
-        apiClient.get('/api/currencies/'),
-        apiClient.get('/api/trade-operation-types/')
+        contractsApi.getAll(),
+        counterpartiesApi.getAll(),
+        commoditiesApi.getAll(),
+        referenceDataApi.getTraders(),
+        referenceDataApi.getCurrencies(),
+        referenceDataApi.getTradeOperationTypes()
       ])
 
-      setContracts(contractsRes.data.results || contractsRes.data)
-      setCounterparties(counterpartiesRes.data.results || counterpartiesRes.data)
-      setCommodities(commoditiesRes.data.results || commoditiesRes.data)
-      setTraders(tradersRes.data.results || tradersRes.data)
-      setCurrencies(currenciesRes.data.results || currenciesRes.data)
-      setTradeOperationTypes(tradeTypesRes.data.results || tradeTypesRes.data)
+      setContracts(contractsRes.results || contractsRes)
+      setCounterparties(counterpartiesRes.results || counterpartiesRes)
+      setCommodities(commoditiesRes.results || commoditiesRes)
+      setTraders(tradersRes)
+      setCurrencies(currenciesRes)
+      setTradeOperationTypes(tradeTypesRes)
     } catch (error) {
       console.error('Error fetching data:', error)
       toast({
@@ -143,13 +88,13 @@ export default function ContractsPage() {
     e.preventDefault()
     try {
       if (editingContract) {
-        await apiClient.put(`/api/contracts/${editingContract.id}/`, formData)
+        await contractsApi.update(editingContract.id, formData)
         toast({
           title: 'Success',
           description: 'Contract updated successfully'
         })
       } else {
-        await apiClient.post('/api/contracts/', formData)
+        await contractsApi.create(formData)
         toast({
           title: 'Success',
           description: 'Contract created successfully'
@@ -173,16 +118,16 @@ export default function ContractsPage() {
     setEditingContract(contract)
     setFormData({
       contract_number: contract.contract_number,
-      counterparty: contract.counterparty.id.toString(),
-      commodity: contract.commodity.id.toString(),
-      trader: contract.trader.id.toString(),
+      counterparty: contract.counterparty.toString(),
+      commodity: contract.commodity.toString(),
+      trader: contract.trader.toString(),
       quantity: contract.quantity,
-      price_per_unit: contract.price_per_unit,
-      currency: contract.currency.id.toString(),
-      delivery_date: contract.delivery_date,
+      price: contract.price,
+      trade_currency: contract.trade_currency.toString(),
+      date: contract.date,
       status: contract.status,
-      trade_operation_type: contract.trade_operation_type.id.toString(),
-      notes: ''
+      trade_operation_type: contract.trade_operation_type.toString(),
+      notes: contract.notes || ''
     })
     setDialogOpen(true)
   }
@@ -191,7 +136,7 @@ export default function ContractsPage() {
     if (!confirm('Are you sure you want to delete this contract?')) return
     
     try {
-      await apiClient.delete(`/api/contracts/${id}/`)
+      await contractsApi.delete(id)
       toast({
         title: 'Success',
         description: 'Contract deleted successfully'
@@ -214,10 +159,10 @@ export default function ContractsPage() {
       commodity: '',
       trader: '',
       quantity: '',
-      price_per_unit: '',
-      currency: '',
-      delivery_date: '',
-      status: 'DRAFT',
+      price: '',
+      trade_currency: '',
+      date: '',
+      status: 'draft',
       trade_operation_type: '',
       notes: ''
     })
@@ -225,13 +170,13 @@ export default function ContractsPage() {
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
-      case 'ACTIVE':
+      case 'executed':
         return 'default'
-      case 'COMPLETED':
+      case 'completed':
         return 'secondary'
-      case 'CANCELLED':
+      case 'cancelled':
         return 'destructive'
-      case 'PENDING':
+      case 'approved':
         return 'outline'
       default:
         return 'outline'
@@ -240,8 +185,8 @@ export default function ContractsPage() {
 
   const filteredContracts = contracts.filter(contract =>
     contract.contract_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contract.counterparty.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contract.commodity.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (contract.counterparty_name && contract.counterparty_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (contract.commodity_name && contract.commodity_name.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   if (loading) {
@@ -304,7 +249,7 @@ export default function ContractsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {counterparties.map(cp => (
-                        <SelectItem key={cp.id} value={cp.id.toString()}>{cp.name}</SelectItem>
+                        <SelectItem key={cp.id} value={cp.id.toString()}>{cp.counterparty_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -317,7 +262,7 @@ export default function ContractsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {commodities.map(commodity => (
-                        <SelectItem key={commodity.id} value={commodity.id.toString()}>{commodity.name}</SelectItem>
+                        <SelectItem key={commodity.id} value={commodity.id.toString()}>{commodity.commodity_name_short}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -333,7 +278,7 @@ export default function ContractsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {traders.map(trader => (
-                        <SelectItem key={trader.id} value={trader.id.toString()}>{trader.name}</SelectItem>
+                        <SelectItem key={trader.id} value={trader.id.toString()}>{trader.trader_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -346,7 +291,7 @@ export default function ContractsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {tradeOperationTypes.map(type => (
-                        <SelectItem key={type.id} value={type.id.toString()}>{type.name}</SelectItem>
+                        <SelectItem key={type.id} value={type.id.toString()}>{type.trade_operation_type_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -366,25 +311,25 @@ export default function ContractsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="price_per_unit">Price per Unit</Label>
+                  <Label htmlFor="price">Price</Label>
                   <Input
-                    id="price_per_unit"
+                    id="price"
                     type="number"
                     step="0.01"
-                    value={formData.price_per_unit}
-                    onChange={(e) => setFormData({ ...formData, price_per_unit: e.target.value })}
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
+                  <Label htmlFor="trade_currency">Currency</Label>
+                  <Select value={formData.trade_currency} onValueChange={(value) => setFormData({ ...formData, trade_currency: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
                       {currencies.map(currency => (
-                        <SelectItem key={currency.id} value={currency.id.toString()}>{currency.code}</SelectItem>
+                        <SelectItem key={currency.id} value={currency.id.toString()}>{currency.currency_code}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -392,12 +337,12 @@ export default function ContractsPage() {
               </div>
 
               <div>
-                <Label htmlFor="delivery_date">Delivery Date</Label>
+                <Label htmlFor="date">Date</Label>
                 <Input
-                  id="delivery_date"
+                  id="date"
                   type="date"
-                  value={formData.delivery_date}
-                  onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                   required
                 />
               </div>
@@ -460,12 +405,12 @@ export default function ContractsPage() {
               {filteredContracts.map((contract) => (
                 <TableRow key={contract.id}>
                   <TableCell className="font-medium">{contract.contract_number}</TableCell>
-                  <TableCell>{contract.counterparty.name}</TableCell>
-                  <TableCell>{contract.commodity.name}</TableCell>
-                  <TableCell>{contract.trader.name}</TableCell>
+                  <TableCell>{contract.counterparty_name || 'N/A'}</TableCell>
+                  <TableCell>{contract.commodity_name || 'N/A'}</TableCell>
+                  <TableCell>{contract.trader_name || 'N/A'}</TableCell>
                   <TableCell>{contract.quantity}</TableCell>
-                  <TableCell>{contract.price_per_unit} {contract.currency.code}</TableCell>
-                  <TableCell>{new Date(contract.delivery_date).toLocaleDateString()}</TableCell>
+                  <TableCell>{contract.price} {contract.trade_currency_code || ''}</TableCell>
+                  <TableCell>{new Date(contract.date).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadgeVariant(contract.status)}>
                       {contract.status}

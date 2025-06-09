@@ -10,7 +10,11 @@
       "Bash(grep:*)",
       "Bash(python manage.py:*)",
       "Bash(python3 manage.py makemigrations:*)",
-      "Bash(ss:*)"
+      "Bash(ss:*)",
+      "Bash(npm run build:*)",
+      "Bash(pkill:*)",
+      "Bash(cp:*)",
+      "Bash(npm run type-check:*)"
     ],
     "deny": []
   }

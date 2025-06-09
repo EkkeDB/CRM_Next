@@ -31,7 +31,7 @@ const navItems: NavItem[] = [
   },
   {
     title: 'Contracts',
-    href: '/contracts',
+    href: '/dashboard/contracts',
     icon: FileText,
   },
   {
