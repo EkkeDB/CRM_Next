@@ -87,14 +87,24 @@ export default function CommoditiesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      // Convert form data to proper types for API
+      const commodityData = {
+        commodity_name_short: formData.commodity_name_short,
+        commodity_name_full: formData.commodity_name_full,
+        commodity_group: parseInt(formData.commodity_group),
+        commodity_type: parseInt(formData.commodity_type),
+        commodity_subtype: parseInt(formData.commodity_subtype),
+        unit_of_measure: formData.unit_of_measure
+      }
+
       if (editingCommodity) {
-        await commoditiesApi.update(editingCommodity.id, formData)
+        await commoditiesApi.update(editingCommodity.id, commodityData)
         toast({
           title: 'Success',
           description: 'Commodity updated successfully'
         })
       } else {
-        await commoditiesApi.create(formData)
+        await commoditiesApi.create(commodityData)
         toast({
           title: 'Success',
           description: 'Commodity created successfully'

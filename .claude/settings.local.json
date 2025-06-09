@@ -14,7 +14,18 @@
       "Bash(npm run build:*)",
       "Bash(pkill:*)",
       "Bash(cp:*)",
-      "Bash(npm run type-check:*)"
+      "Bash(npm run type-check:*)",
+      "Bash(ls:*)",
+      "Bash(npx next build:*)",
+      "Bash(npm run lint)",
+      "Bash(find:*)",
+      "Bash(npm run dev:*)",
+      "Bash(rm:*)",
+      "Bash(npm install)",
+      "Bash(sudo rm:*)",
+      "Bash(true)",
+      "Bash(sudo chown:*)",
+      "Bash(npm install:*)"
     ],
     "deny": []
   }

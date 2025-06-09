@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     template: '%s | NextCRM',
   },
   description: 'Modern commodity trading CRM system built with Next.js and Django',
+  icons: {
+    icon: '/favicon.ico',
+  },
   keywords: ['CRM', 'Commodity Trading', 'Next.js', 'Django', 'TypeScript'],
   authors: [{ name: 'NextCRM Team' }],
   creator: 'NextCRM',

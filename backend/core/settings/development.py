@@ -49,6 +49,14 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://0\.0\.0\.0:\d+$",
 ]
 
+# CSRF trusted origins for development
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+]
+
 # Logging for development
 LOGGING['handlers']['console']['level'] = 'DEBUG'
 LOGGING['loggers']['django']['level'] = 'DEBUG'

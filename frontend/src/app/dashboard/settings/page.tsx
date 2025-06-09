@@ -195,6 +195,7 @@ export default function SettingsPage() {
       await authApi.changePassword({
         old_password: settings.security.currentPassword,
         new_password: settings.security.newPassword,
+        new_password_confirm: settings.security.confirmPassword,
       })
       
       setSettings(prev => ({

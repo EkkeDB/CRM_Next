@@ -13,6 +13,8 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.http import JsonResponse
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django_ratelimit.decorators import ratelimit
 
 from .models import UserProfile, SecurityLog, AuditLog
@@ -334,3 +336,11 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
         
         return Response({'message': 'User deactivated successfully'})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@ensure_csrf_cookie
+def csrf_token(request):
+    """Get CSRF token for frontend"""
+    return JsonResponse({'csrfToken': get_token(request)})

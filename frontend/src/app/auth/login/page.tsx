@@ -51,33 +51,45 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+      
+      <div className="relative max-w-md w-full space-y-8">
         {/* Logo and Header */}
         <div className="text-center">
-          <div className="flex justify-center">
-            <Truck className="h-12 w-12 text-primary" />
+          <div className="flex justify-center mb-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl"></div>
+              <div className="relative bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-lg border border-white/20">
+                <Truck className="h-12 w-12 text-primary" />
+              </div>
+            </div>
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Sign in to NextCRM
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+            Welcome to NextCRM
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Commodity Trading CRM System
+          <p className="mt-2 text-slate-600 dark:text-slate-400 font-medium">
+            Commodity Trading Management Platform
           </p>
         </div>
 
         {/* Login Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Welcome back</CardTitle>
-            <CardDescription>
+        <Card className="backdrop-blur-sm bg-white/80 dark:bg-slate-800/80 border border-white/20 shadow-2xl">
+          <CardHeader className="text-center pb-6">
+            <CardTitle className="text-2xl font-semibold text-slate-900 dark:text-white">
+              Sign In
+            </CardTitle>
+            <CardDescription className="text-slate-600 dark:text-slate-400">
               Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username" className="text-slate-700 dark:text-slate-300 font-medium">
+                  Username
+                </Label>
                 <Input
                   id="username"
                   name="username"
@@ -87,11 +99,14 @@ export default function LoginPage() {
                   onChange={handleChange}
                   placeholder="Enter your username"
                   disabled={login.isPending}
+                  className="h-12 bg-white/50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 focus:border-primary focus:ring-primary/20"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-slate-700 dark:text-slate-300 font-medium">
+                  Password
+                </Label>
                 <Input
                   id="password"
                   name="password"
@@ -101,32 +116,41 @@ export default function LoginPage() {
                   onChange={handleChange}
                   placeholder="Enter your password"
                   disabled={login.isPending}
+                  className="h-12 bg-white/50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 focus:border-primary focus:ring-primary/20"
                 />
               </div>
 
               <Button
                 type="submit"
-                className="w-full"
-                loading={login.isPending}
+                className="w-full h-12 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={login.isPending}
               >
                 {login.isPending ? 'Signing in...' : 'Sign in'}
               </Button>
 
               {/* Demo credentials */}
-              <div className="mt-4 p-3 bg-blue-50 rounded-md">
-                <p className="text-sm text-blue-800 font-medium mb-2">Demo Credentials:</p>
-                <p className="text-xs text-blue-700">Username: admin</p>
-                <p className="text-xs text-blue-700">Password: admin123</p>
+              <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl border border-blue-200/50 dark:border-blue-800/50">
+                <p className="text-sm text-blue-800 dark:text-blue-300 font-semibold mb-3 flex items-center">
+                  <span className="h-2 w-2 bg-blue-500 rounded-full mr-2"></span>
+                  Demo Credentials
+                </p>
+                <div className="space-y-1">
+                  <p className="text-xs text-blue-700 dark:text-blue-400 font-mono bg-white/50 dark:bg-slate-800/50 px-2 py-1 rounded">
+                    Username: admin
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-400 font-mono bg-white/50 dark:bg-slate-800/50 px-2 py-1 rounded">
+                    Password: admin123
+                  </p>
+                </div>
               </div>
             </form>
 
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+            <div className="mt-8 text-center">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
                 Don't have an account?{' '}
                 <Link 
                   href="/auth/register" 
-                  className="font-medium text-primary hover:text-primary/80"
+                  className="font-semibold text-primary hover:text-primary/80 transition-colors"
                 >
                   Sign up
                 </Link>
@@ -136,7 +160,7 @@ export default function LoginPage() {
         </Card>
 
         {/* Footer */}
-        <div className="text-center text-xs text-gray-500">
+        <div className="text-center text-xs text-slate-500 dark:text-slate-400">
           <p>&copy; 2025 NextCRM. All rights reserved.</p>
         </div>
       </div>

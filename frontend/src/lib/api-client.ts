@@ -29,10 +29,27 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
+// Function to get CSRF token
+const getCSRFToken = async (): Promise<string> => {
+  try {
+    const response = await apiClient.get('/auth/csrf/')
+    return response.data.csrfToken
+  } catch (error) {
+    console.error('Failed to get CSRF token:', error)
+    return ''
+  }
+}
+
 // Request interceptor
 apiClient.interceptors.request.use(
-  (config) => {
-    // Add any common headers or auth tokens here
+  async (config) => {
+    // Add CSRF token for non-GET requests
+    if (config.method !== 'get') {
+      const csrfToken = await getCSRFToken()
+      if (csrfToken) {
+        config.headers['X-CSRFToken'] = csrfToken
+      }
+    }
     return config
   },
   (error) => {

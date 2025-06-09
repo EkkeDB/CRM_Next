@@ -87,14 +87,43 @@ export default function ContractsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      // Convert form data to proper types for API
+      const contractData = {
+        contract_number: formData.contract_number,
+        trader: parseInt(formData.trader),
+        trade_operation_type: parseInt(formData.trade_operation_type),
+        sociedad: 1, // Default value - you may need to adjust this
+        counterparty: parseInt(formData.counterparty),
+        commodity: parseInt(formData.commodity),
+        commodity_group: 1, // Default value - you may need to adjust this
+        delivery_format: 1, // Default value - you may need to adjust this
+        additive: 1, // Default value - you may need to adjust this
+        broker: 1, // Default value - you may need to adjust this
+        icoterm: 1, // Default value - you may need to adjust this
+        cost_center: 1, // Default value - you may need to adjust this
+        broker_fee: '0.00',
+        broker_fee_currency: parseInt(formData.trade_currency),
+        freight_cost: '0.00',
+        forex: '1.00',
+        price: formData.price,
+        trade_currency: parseInt(formData.trade_currency),
+        payment_days: 30, // Default value
+        quantity: formData.quantity,
+        unit_of_measure: 'MT', // Default value
+        entrega: '',
+        delivery_period: '',
+        date: formData.date,
+        notes: formData.notes
+      }
+
       if (editingContract) {
-        await contractsApi.update(editingContract.id, formData)
+        await contractsApi.update(editingContract.id, contractData)
         toast({
           title: 'Success',
           description: 'Contract updated successfully'
         })
       } else {
-        await contractsApi.create(formData)
+        await contractsApi.create(contractData)
         toast({
           title: 'Success',
           description: 'Contract created successfully'

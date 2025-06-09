@@ -1,80 +1,36 @@
 "use client"
 
 import React from 'react'
-import { useDashboardStats } from '@/hooks/use-contracts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency, formatNumber } from '@/lib/utils'
 import { 
-  TrendingUp, 
-  TrendingDown, 
   DollarSign, 
   FileText, 
   CheckCircle, 
   Clock 
 } from 'lucide-react'
-import { 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  PieChart, 
-  Pie, 
-  Cell,
-  LineChart,
-  Line
-} from 'recharts'
-
-// Color palette for charts
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
 interface StatCardProps {
   title: string
   value: string | number
-  change?: string
-  changeType?: 'positive' | 'negative' | 'neutral'
   icon: React.ReactNode
 }
 
-function StatCard({ title, value, change, changeType, icon }: StatCardProps) {
-  const getChangeColor = (type: typeof changeType) => {
-    switch (type) {
-      case 'positive':
-        return 'text-green-600'
-      case 'negative':
-        return 'text-red-600'
-      default:
-        return 'text-gray-600'
-    }
-  }
-
-  const getChangeIcon = (type: typeof changeType) => {
-    switch (type) {
-      case 'positive':
-        return <TrendingUp className="h-4 w-4" />
-      case 'negative':
-        return <TrendingDown className="h-4 w-4" />
-      default:
-        return null
-    }
-  }
-
+function StatCard({ title, value, icon }: StatCardProps) {
   return (
-    <Card>
+    <Card className="hover:shadow-md transition-shadow duration-200">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {icon}
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+          {icon}
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {change && (
-          <p className={`text-xs ${getChangeColor(changeType)} flex items-center gap-1`}>
-            {getChangeIcon(changeType)}
-            {change}
-          </p>
-        )}
+        <div className="text-2xl font-bold text-foreground">{value}</div>
+        <p className="text-xs text-muted-foreground mt-1">
+          {title === "Total Value" ? "Combined contract value" : 
+           title === "Total Contracts" ? "All contracts in system" :
+           title === "Active Contracts" ? "Currently active" : "Awaiting approval"}
+        </p>
       </CardContent>
     </Card>
   )
@@ -123,59 +79,20 @@ function LoadingSkeleton() {
 }
 
 export default function DashboardPage() {
-  const { data: stats, isLoading, error } = useDashboardStats()
-
-  if (isLoading) {
-    return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        </div>
-        <LoadingSkeleton />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center text-red-600">
-              <p>Error loading dashboard data</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Please try again later or contact support if the problem persists.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Process data for charts
-  const monthlyData = stats?.monthly_contract_values?.map(item => ({
-    month: new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-    value: parseFloat(item.total_value),
-    contracts: item.contract_count
-  })) || []
-
-  const statusData = stats?.contract_status_distribution?.map(item => ({
-    name: item.status.charAt(0).toUpperCase() + item.status.slice(1),
-    value: item.count
-  })) || []
-
-  const topCounterparties = stats?.top_counterparties?.slice(0, 5) || []
-  const topCommodities = stats?.top_commodities?.slice(0, 5) || []
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <div className="flex items-center space-x-2">
+    <div className="space-y-8 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            Dashboard
+          </h2>
+          <p className="text-muted-foreground mt-1">
+            Welcome to your CRM overview
+          </p>
+        </div>
+        <div className="flex items-center space-x-2 bg-card border rounded-lg px-3 py-2 shadow-sm">
+          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
           <span className="text-sm text-muted-foreground">
             Last updated: {new Date().toLocaleTimeString()}
           </span>
@@ -183,165 +100,102 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Contracts"
-          value={formatNumber(stats?.total_contracts || 0)}
-          icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+          value="0"
+          icon={<FileText className="h-4 w-4 text-primary" />}
         />
         <StatCard
           title="Total Value"
-          value={formatCurrency(parseFloat(stats?.total_value || '0'))}
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+          value="$0.00"
+          icon={<DollarSign className="h-4 w-4 text-green-600" />}
         />
         <StatCard
           title="Active Contracts"
-          value={formatNumber(stats?.active_contracts || 0)}
-          icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />}
+          value="0"
+          icon={<CheckCircle className="h-4 w-4 text-blue-600" />}
         />
         <StatCard
           title="Pending Contracts"
-          value={formatNumber(stats?.pending_contracts || 0)}
-          icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+          value="0"
+          icon={<Clock className="h-4 w-4 text-amber-600" />}
         />
       </div>
 
-      {/* Charts */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Monthly Contract Values */}
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Monthly Contract Values</CardTitle>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <ResponsiveContainer width="100%" height={350}>
-              <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="month" 
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis 
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => `$${formatNumber(value / 1000)}K`}
-                />
-                <Tooltip 
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-white p-3 border rounded-lg shadow-lg">
-                          <p className="font-semibold">{`Month: ${label}`}</p>
-                          <p className="text-blue-600">
-                            {`Value: ${formatCurrency(payload[0].value as number)}`}
-                          </p>
-                          <p className="text-gray-600">
-                            {`Contracts: ${payload[0].payload.contracts}`}
-                          </p>
-                        </div>
-                      )
-                    }
-                    return null
-                  }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  strokeWidth={2} 
-                  stroke="#8884d8"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Contract Status Distribution */}
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Contract Status Distribution</CardTitle>
+      {/* Charts Placeholder */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Monthly Contract Values</CardTitle>
+            <p className="text-sm text-muted-foreground">Contract values over the last 12 months</p>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={350}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Top Counterparties and Commodities */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Top Counterparties */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Counterparties by Value</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {topCounterparties.map((cp, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    <span className="text-sm font-medium">
-                      {cp.counterparty__counterparty_name}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold">
-                      {formatCurrency(parseFloat(cp.total_value))}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {cp.contract_count} contracts
-                    </div>
-                  </div>
+            <div className="h-80 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border-2 border-dashed border-blue-200 dark:border-blue-800">
+              <div className="text-center">
+                <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
-              ))}
+                <p className="text-muted-foreground font-medium">Chart will appear here</p>
+                <p className="text-xs text-muted-foreground mt-1">Connect data source to display chart</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Top Commodities */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Commodities by Volume</CardTitle>
+        <Card className="col-span-3 shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Contract Status Distribution</CardTitle>
+            <p className="text-sm text-muted-foreground">Breakdown of contract statuses</p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {topCommodities.map((commodity, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span className="text-sm font-medium">
-                      {commodity.commodity__commodity_name_short}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold">
-                      {formatNumber(parseFloat(commodity.total_quantity))} MT
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {commodity.contract_count} contracts
-                    </div>
-                  </div>
+            <div className="h-80 flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border-2 border-dashed border-green-200 dark:border-green-800">
+              <div className="text-center">
+                <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                 </div>
-              ))}
+                <p className="text-muted-foreground font-medium">Chart will appear here</p>
+                <p className="text-xs text-muted-foreground mt-1">Connect data source to display chart</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top lists placeholder */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Top Counterparties by Value</CardTitle>
+            <p className="text-sm text-muted-foreground">Highest value trading partners</p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-40 flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 rounded-lg border-2 border-dashed border-purple-200 dark:border-purple-800">
+              <div className="text-center">
+                <div className="h-10 w-10 mx-auto mb-2 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
+                  <DollarSign className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <p className="text-muted-foreground font-medium">Data will appear here</p>
+                <p className="text-xs text-muted-foreground mt-1">Connect data source to display list</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Top Commodities by Volume</CardTitle>
+            <p className="text-sm text-muted-foreground">Most traded commodities</p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-40 flex items-center justify-center bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg border-2 border-dashed border-orange-200 dark:border-orange-800">
+              <div className="text-center">
+                <div className="h-10 w-10 mx-auto mb-2 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
+                  <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <p className="text-muted-foreground font-medium">Data will appear here</p>
+                <p className="text-xs text-muted-foreground mt-1">Connect data source to display list</p>
+              </div>
             </div>
           </CardContent>
         </Card>

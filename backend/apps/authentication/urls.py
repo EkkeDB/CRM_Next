@@ -8,7 +8,7 @@ from .views import (
     LoginView, LogoutView, RegisterView, UserProfileView,
     ChangePasswordView, SecurityLogViewSet, AuditLogViewSet,
     UserViewSet, me, health_check, CustomTokenObtainPairView,
-    CustomTokenRefreshView
+    CustomTokenRefreshView, csrf_token
 )
 
 router = DefaultRouter()
@@ -31,6 +31,7 @@ urlpatterns = [
     
     # Utility endpoints
     path('health/', health_check, name='health_check'),
+    path('csrf/', csrf_token, name='csrf_token'),
     
     # Include router URLs
     path('', include(router.urls)),
