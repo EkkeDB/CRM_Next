@@ -1,0 +1,247 @@
+NextCRM - How to Start and Use the Application
+==============================================
+
+WHAT IS THIS?
+-------------
+NextCRM is a commodity trading CRM system. It helps companies manage:
+- Trading contracts
+- Customers and suppliers (counterparties)
+- Commodities (wheat, oil, metals, etc.)
+- Traders and brokers
+- Financial data and reports
+
+HOW TO START THE APPLICATION
+============================
+
+EASIEST WAY (Recommended):
+-------------------------
+1. Open a terminal/command prompt
+2. Navigate to the project folder:
+   cd /mnt/c/Mis_Proyectos/Python/CRM_Next
+
+3. Run this ONE command:
+   make up
+
+4. Wait about 30 seconds for everything to start
+
+5. Open your web browser and go to:
+   http://localhost:3000
+
+That's it! The application should be running.
+
+ALTERNATIVE METHOD (Manual Docker):
+----------------------------------
+1. Open terminal in project folder
+2. Run: docker-compose up -d
+3. Wait for services to start
+4. Go to: http://localhost:3000
+
+PRODUCTION MODE:
+---------------
+1. Run: make prod-up
+2. Go to: http://localhost (port 80)
+
+WHERE TO GO IN THE BROWSER
+==========================
+
+Main Application:
+- Frontend: http://localhost:3000
+- Login page will appear first
+
+Admin Panel (for advanced users):
+- Admin: http://localhost:8000/admin
+- Use superuser account you create
+
+API Documentation:
+- API Docs: http://localhost:8000/api/docs
+- Shows all available endpoints
+
+HOW TO LOGIN
+============
+
+READY TO USE LOGIN:
+- Username: admin
+- Password: admin123
+
+Just go to http://localhost:3000 and use these credentials!
+
+WHAT YOU CAN DO IN THE APP
+===========================
+
+After logging in, you'll see the main dashboard with a left sidebar menu:
+
+✅ WORKING FEATURES:
+
+📊 DASHBOARD - Main overview page with charts and statistics
+
+📋 CONTRACTS - Fully functional contract management:
+- Click "Contracts" in the left sidebar
+- View all trading contracts in a table
+- Click "New Contract" to add contracts
+- Click the edit icon to modify contracts
+- Click the delete icon to remove contracts
+- Use the search box to find specific contracts
+- See contract status (Draft, Active, Completed, etc.)
+
+🏢 ADMIN PANEL - For advanced management:
+- Go to http://localhost:8000/admin
+- Use admin/admin123 to login
+- Add basic data like currencies, commodities, traders
+- Required before creating contracts
+
+🔧 OTHER FEATURES:
+- Theme toggle: Switch between light/dark mode (top right)
+- User menu: Profile, settings, logout (top right)
+
+🚧 COMING SOON (not yet implemented):
+- Counterparties: Manage customers and suppliers
+- Commodities: Manage products catalog
+- Traders: Manage trader profiles
+- Reports: Financial reports
+- Analytics: Advanced data analysis
+
+STEP-BY-STEP: HOW TO USE CONTRACTS
+==================================
+
+IMPORTANT: Before adding contracts, you need basic data!
+
+STEP 1: ADD BASIC DATA FIRST
+---------------------------
+1. Go to http://localhost:8000/admin
+2. Login with admin/admin123
+3. Add some basic data:
+   - Click "Currencies" → Add (USD, EUR, etc.)
+   - Click "Traders" → Add (John Smith, etc.)
+   - Click "Counterparties" → Add (Acme Corp, etc.)
+   - Click "Commodities" → Add (Wheat, Oil, etc.)
+   - Click "Trade operation types" → Add (Buy, Sell)
+
+STEP 2: ADD A CONTRACT
+---------------------
+1. Go back to http://localhost:3000
+2. Click "Contracts" in the left sidebar
+3. Click "New Contract" button
+4. Fill out the form:
+   - Contract Number: CTR-001
+   - Select counterparty from dropdown
+   - Select commodity from dropdown
+   - Select trader from dropdown
+   - Enter quantity (like 1000)
+   - Enter price (like 50.00)
+   - Select currency from dropdown
+   - Pick a delivery date
+   - Choose status (Draft, Active, etc.)
+5. Click "Create Contract"
+
+STEP 3: MANAGE CONTRACTS
+-----------------------
+- View all contracts in the table
+- Use search box to find contracts
+- Click edit icon (pencil) to modify
+- Click delete icon (trash) to remove
+- Contracts show: number, counterparty, commodity, price, status
+
+CONTRACT STATUSES:
+- Draft: New contract being created
+- Pending: Waiting for approval
+- Active: Contract is live
+- Completed: Contract finished
+- Cancelled: Contract cancelled
+
+QUICK TEST TO VERIFY EVERYTHING WORKS
+====================================
+
+1. Start the application: make up
+2. Go to http://localhost:3000
+3. Login with admin/admin123
+4. You should see the dashboard
+5. Click "Contracts" in sidebar
+6. You should see an empty contracts table
+7. Click theme toggle (top right) - should switch dark/light
+8. Go to http://localhost:8000/admin
+9. Login with admin/admin123
+10. You should see the Django admin panel
+
+If all these steps work, the application is running correctly!
+
+COMMON ISSUES AND SOLUTIONS
+===========================
+
+ISSUE: Can't access http://localhost:3000
+SOLUTION: 
+- Check if Docker is running
+- Run: docker-compose ps (should show all services running)
+- Wait 30-60 seconds for services to start
+- Run: make up (to restart everything)
+
+ISSUE: Login doesn't work
+SOLUTION:
+- Use: admin / admin123
+- If that doesn't work, run: make createsuperuser
+
+ISSUE: Can't add contracts (empty dropdowns)
+SOLUTION:
+- FIRST add basic data in admin panel:
+  1. Go to http://localhost:8000/admin
+  2. Login with admin/admin123
+  3. Add currencies, traders, counterparties, commodities
+  4. THEN try adding contracts
+
+ISSUE: Services won't start
+SOLUTION:
+- Run: make down
+- Run: make up
+- If still problems: make clean && make up
+
+USEFUL COMMANDS
+===============
+
+START APPLICATION:
+make up
+
+STOP APPLICATION:
+make down
+
+VIEW LOGS (if something is wrong):
+make logs
+
+RESTART EVERYTHING:
+make restart
+
+RESET EVERYTHING (if totally broken):
+make clean && make up
+
+CREATE NEW ADMIN USER:
+make createsuperuser
+
+SUMMARY - QUICK REFERENCE
+==========================
+
+TO START:
+1. Open terminal in project folder
+2. Run: make up
+3. Go to: http://localhost:3000
+4. Login: admin / admin123
+
+MAIN FEATURES READY TO USE:
+✅ Dashboard with charts
+✅ Contract management (full CRUD)
+✅ Admin panel for basic data
+✅ Theme switching (light/dark)
+
+ADDRESSES:
+- Main App: http://localhost:3000
+- Admin Panel: http://localhost:8000/admin
+- API Docs: http://localhost:8000/api/docs
+
+WORKFLOW:
+1. Add basic data in admin panel first
+2. Create contracts in main app
+3. Manage and track contracts
+
+TROUBLESHOOTING:
+- Can't access? Wait 30-60 seconds, check Docker is running
+- Empty dropdowns? Add currencies, traders, etc. in admin panel first
+- Still broken? Run: make clean && make up
+
+The application is designed for commodity trading companies to manage their contracts, customers, and trading operations. Currently the contract management is fully working!
