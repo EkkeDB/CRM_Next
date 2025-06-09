@@ -9,10 +9,6 @@ WORKDIR /app
 
 # Set environment variables
 ENV NODE_ENV=development
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_APP_NAME=NextCRM
-ENV NEXT_PUBLIC_APP_VERSION=1.0.0
-ENV NEXT_PUBLIC_ENV=development
 
 # Copy package files
 COPY package.json ./

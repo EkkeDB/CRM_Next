@@ -1,0 +1,19 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+backend/venv/
+
+# Logs
+backend/logs/
+*.log
+
+# Environment files
+.env
+
+# Node artifacts
+frontend/node_modules/
+frontend/.next/
+
+# Misc
+.DS_Store
