@@ -9,7 +9,8 @@
       "Bash(curl:*)",
       "Bash(grep:*)",
       "Bash(python manage.py:*)",
-      "Bash(python3 manage.py makemigrations:*)"
+      "Bash(python3 manage.py makemigrations:*)",
+      "Bash(ss:*)"
     ],
     "deny": []
   }
