@@ -11,128 +11,60 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Package, Layers, TrendingUp } from 'lucide-react'
+import { referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface CommodityType {
-  id: number
-  type_code: string
-  type_name: string
-  description: string
-  commodity_group: string
-  is_active: boolean
-  commodity_count: number
-  created_at: string
-}
-
-// Mock data - replace with API calls
-const mockCommodityTypes: CommodityType[] = [
-  {
-    id: 1,
-    type_code: 'PREC',
-    type_name: 'Precious Metals',
-    description: 'Gold, silver, platinum, and other precious metals',
-    commodity_group: 'METALS',
-    is_active: true,
-    commodity_count: 4,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    type_code: 'BASE',
-    type_name: 'Base Metals',
-    description: 'Copper, aluminum, zinc, and other base metals',
-    commodity_group: 'METALS',
-    is_active: true,
-    commodity_count: 8,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    type_code: 'CRUDE',
-    type_name: 'Crude Oil',
-    description: 'Various grades of crude oil',
-    commodity_group: 'ENERGY',
-    is_active: true,
-    commodity_count: 5,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    type_code: 'NATGAS',
-    type_name: 'Natural Gas',
-    description: 'Natural gas and related products',
-    commodity_group: 'ENERGY',
-    is_active: true,
-    commodity_count: 3,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 5,
-    type_code: 'GRAINS',
-    type_name: 'Grains',
-    description: 'Wheat, corn, rice, and other grains',
-    commodity_group: 'AGRI',
-    is_active: true,
-    commodity_count: 12,
-    created_at: '2024-01-01'
-  }
-]
-
-const commodityGroupOptions = [
-  { value: 'METALS', label: 'Metals' },
-  { value: 'ENERGY', label: 'Energy' },
-  { value: 'AGRI', label: 'Agriculture' },
-  { value: 'SOFT', label: 'Soft Commodities' },
-  { value: 'CHEM', label: 'Chemicals' }
-]
+import type { CommodityType, CommodityGroup } from '@/types'
 
 export default function CommodityTypesPage() {
-  const [commodityTypes, setCommodityTypes] = useState<CommodityType[]>(mockCommodityTypes)
-  const [loading, setLoading] = useState(false)
+  const [commodityTypes, setCommodityTypes] = useState<CommodityType[]>([])
+  const [commodityGroups, setCommodityGroups] = useState<CommodityGroup[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingType, setEditingType] = useState<CommodityType | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    type_code: '',
-    type_name: '',
-    description: '',
+    commodity_type_name: '',
     commodity_group: '',
-    is_active: true
+    description: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const [typesData, groupsData] = await Promise.all([
+        referenceDataApi.getCommodityTypes(),
+        referenceDataApi.getCommodityGroups()
+      ])
+      setCommodityTypes(typesData)
+      setCommodityGroups(groupsData)
+    } catch (error) {
+      console.error('Error fetching commodity types:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch commodity types',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingType) {
-        // Update existing type
-        const updatedType = {
-          ...editingType,
-          ...formData,
-          id: editingType.id,
-          created_at: editingType.created_at,
-          commodity_count: editingType.commodity_count
-        }
-        setCommodityTypes(commodityTypes.map(t => t.id === editingType.id ? updatedType : t))
-        toast({
-          title: 'Success',
-          description: 'Commodity type updated successfully'
-        })
-      } else {
-        // Create new type
-        const newType: CommodityType = {
-          ...formData,
-          id: Math.max(...commodityTypes.map(t => t.id)) + 1,
-          commodity_count: 0,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setCommodityTypes([...commodityTypes, newType])
-        toast({
-          title: 'Success',
-          description: 'Commodity type created successfully'
-        })
-      }
+      // Note: API endpoints for commodity type CRUD may not be implemented yet
+      toast({
+        title: 'Info',
+        description: 'Commodity type create/update API endpoints not yet implemented',
+        variant: 'default'
+      })
+      
       setDialogOpen(false)
       setEditingType(null)
       resetForm()
@@ -149,11 +81,9 @@ export default function CommodityTypesPage() {
   const handleEdit = (type: CommodityType) => {
     setEditingType(type)
     setFormData({
-      type_code: type.type_code,
-      type_name: type.type_name,
-      description: type.description,
-      commodity_group: type.commodity_group,
-      is_active: type.is_active
+      commodity_type_name: type.commodity_type_name,
+      commodity_group: type.commodity_group.toString(),
+      description: type.description
     })
     setDialogOpen(true)
   }
@@ -162,10 +92,10 @@ export default function CommodityTypesPage() {
     if (!confirm('Are you sure you want to delete this commodity type?')) return
     
     try {
-      setCommodityTypes(commodityTypes.filter(t => t.id !== id))
       toast({
-        title: 'Success',
-        description: 'Commodity type deleted successfully'
+        title: 'Info',
+        description: 'Commodity type delete API endpoint not yet implemented',
+        variant: 'default'
       })
     } catch (error) {
       console.error('Error deleting commodity type:', error)
@@ -179,22 +109,25 @@ export default function CommodityTypesPage() {
 
   const resetForm = () => {
     setFormData({
-      type_code: '',
-      type_name: '',
-      description: '',
+      commodity_type_name: '',
       commodity_group: '',
-      is_active: true
+      description: ''
     })
   }
 
   const filteredTypes = commodityTypes.filter(type =>
-    type.type_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    type.type_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    type.commodity_group.toLowerCase().includes(searchTerm.toLowerCase())
+    type.commodity_type_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    type.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (type.commodity_group_name && type.commodity_group_name.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
-  const activeTypes = commodityTypes.filter(t => t.is_active).length
-  const totalCommodities = commodityTypes.reduce((sum, t) => sum + t.commodity_count, 0)
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -226,22 +159,11 @@ export default function CommodityTypesPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="type_code">Type Code *</Label>
+                <Label htmlFor="commodity_type_name">Type Name *</Label>
                 <Input
-                  id="type_code"
-                  value={formData.type_code}
-                  onChange={(e) => setFormData({ ...formData, type_code: e.target.value.toUpperCase() })}
-                  required
-                  placeholder="PREC"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="type_name">Type Name *</Label>
-                <Input
-                  id="type_name"
-                  value={formData.type_name}
-                  onChange={(e) => setFormData({ ...formData, type_name: e.target.value })}
+                  id="commodity_type_name"
+                  value={formData.commodity_type_name}
+                  onChange={(e) => setFormData({ ...formData, commodity_type_name: e.target.value })}
                   required
                   placeholder="Precious Metals"
                 />
@@ -254,8 +176,8 @@ export default function CommodityTypesPage() {
                     <SelectValue placeholder="Select group" />
                   </SelectTrigger>
                   <SelectContent>
-                    {commodityGroupOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    {commodityGroups.map(group => (
+                      <SelectItem key={group.id} value={group.id.toString()}>{group.commodity_group_name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -269,17 +191,6 @@ export default function CommodityTypesPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description of the commodity type..."
                 />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active Type</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -311,10 +222,10 @@ export default function CommodityTypesPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <TrendingUp className="h-8 w-8 text-green-600" />
+              <Layers className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Types</p>
-                <p className="text-2xl font-bold">{activeTypes}</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Groups</p>
+                <p className="text-2xl font-bold">{commodityGroups.length}</p>
               </div>
             </div>
           </CardContent>
@@ -322,10 +233,12 @@ export default function CommodityTypesPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <Layers className="h-8 w-8 text-orange-600" />
+              <TrendingUp className="h-8 w-8 text-orange-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Commodities</p>
-                <p className="text-2xl font-bold">{totalCommodities}</p>
+                <p className="text-sm font-medium text-muted-foreground">With Description</p>
+                <p className="text-2xl font-bold">
+                  {commodityTypes.filter(t => t.description && t.description.trim()).length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -335,10 +248,8 @@ export default function CommodityTypesPage() {
             <div className="flex items-center space-x-2">
               <Package className="h-8 w-8 text-purple-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg per Type</p>
-                <p className="text-2xl font-bold">
-                  {commodityTypes.length > 0 ? Math.round(totalCommodities / commodityTypes.length) : 0}
-                </p>
+                <p className="text-sm font-medium text-muted-foreground">Hierarchy</p>
+                <p className="text-2xl font-bold">Nested</p>
               </div>
             </div>
           </CardContent>
@@ -377,11 +288,10 @@ export default function CommodityTypesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Group</TableHead>
+                <TableHead>Type Name</TableHead>
+                <TableHead>Commodity Group</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Commodities</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -394,13 +304,12 @@ export default function CommodityTypesPage() {
                         <Package className="h-5 w-5 text-cyan-600" />
                       </div>
                       <div>
-                        <div className="font-medium">{type.type_code}</div>
-                        <div className="text-sm text-muted-foreground">{type.type_name}</div>
+                        <div className="font-medium">{type.commodity_type_name}</div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{type.commodity_group}</Badge>
+                    <Badge variant="outline">{type.commodity_group_name || 'N/A'}</Badge>
                   </TableCell>
                   <TableCell>
                     <div className="max-w-xs">
@@ -410,22 +319,20 @@ export default function CommodityTypesPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Layers className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{type.commodity_count}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={type.is_active ? "default" : "secondary"}>
-                      {type.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                    <span className="text-sm text-muted-foreground">#{type.id}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
                       <Button variant="outline" size="sm" onClick={() => handleEdit(type)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(type.id)}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDelete(type.id)}
+                        disabled
+                        title="Delete functionality not yet implemented"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -441,6 +348,18 @@ export default function CommodityTypesPage() {
               <p className="text-sm text-gray-400">Try adjusting your search</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Note */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Package className="h-4 w-4" />
+            <span>
+              Commodity type data is loaded from the database with proper hierarchy linking to commodity groups. Create/Update/Delete operations require API implementation.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>

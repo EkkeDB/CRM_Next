@@ -1,8 +1,7 @@
 {
+  "/dashboard/commodity-groups/page": "app/dashboard/commodity-groups/page.js",
+  "/dashboard/commodity-types/page": "app/dashboard/commodity-types/page.js",
+  "/dashboard/commodity-subtypes/page": "app/dashboard/commodity-subtypes/page.js",
   "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
-  "/dashboard/additives/page": "app/dashboard/additives/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/traders/page": "app/dashboard/traders/page.js",
-  "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
-  "/dashboard/delivery-formats/page": "app/dashboard/delivery-formats/page.js"
+  "/dashboard/commodities/page": "app/dashboard/commodities/page.js"
 }

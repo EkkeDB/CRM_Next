@@ -51,8 +51,8 @@ class CommoditySubtypeAdmin(admin.ModelAdmin):
 
 @admin.register(Commodity)
 class CommodityAdmin(admin.ModelAdmin):
-    list_display = ('commodity_name_short', 'commodity_name_full', 'commodity_group', 'unit_of_measure')
-    list_filter = ('commodity_group', 'commodity_type', 'commodity_subtype')
+    list_display = ('commodity_name_short', 'commodity_name_full', 'commodity_subtype', 'unit_of_measure')
+    list_filter = ('commodity_subtype', 'commodity_subtype__commodity_type', 'commodity_subtype__commodity_type__commodity_group')
     search_fields = ('commodity_name_short', 'commodity_name_full')
     ordering = ('commodity_name_short',)
 
@@ -120,7 +120,7 @@ class ContractAdmin(admin.ModelAdmin):
         'price', 'status', 'date', 'trader'
     )
     list_filter = (
-        'status', 'date', 'trader', 'counterparty', 'commodity_group',
+        'status', 'date', 'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type__commodity_group',
         'trade_operation_type'
     )
     search_fields = (
@@ -139,7 +139,7 @@ class ContractAdmin(admin.ModelAdmin):
         }),
         ('Commodity Details', {
             'fields': (
-                'commodity', 'commodity_group', 'quantity', 'unit_of_measure',
+                'commodity', 'quantity', 'unit_of_measure',
                 'delivery_format', 'additive'
             )
         }),

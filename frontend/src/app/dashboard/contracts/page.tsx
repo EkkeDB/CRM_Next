@@ -25,7 +25,6 @@ const CONTRACT_STATUSES = [
 
 interface ReferenceData {
   sociedades: any[]
-  commodityGroups: any[]
   deliveryFormats: any[]
   additives: any[]
   brokers: any[]
@@ -42,7 +41,6 @@ export default function ContractsPage() {
   const [tradeOperationTypes, setTradeOperationTypes] = useState<TradeOperationType[]>([])
   const [referenceData, setReferenceData] = useState<ReferenceData>({
     sociedades: [],
-    commodityGroups: [],
     deliveryFormats: [],
     additives: [],
     brokers: [],
@@ -68,7 +66,6 @@ export default function ContractsPage() {
     status: 'draft',
     trade_operation_type: '',
     sociedad: '',
-    commodity_group: '',
     delivery_format: '',
     additive: '',
     broker: '',
@@ -99,7 +96,6 @@ export default function ContractsPage() {
         currenciesRes, 
         tradeTypesRes,
         sociedadesRes,
-        commodityGroupsRes,
         deliveryFormatsRes,
         additivesRes,
         brokersRes,
@@ -113,7 +109,6 @@ export default function ContractsPage() {
         referenceDataApi.getCurrencies(),
         referenceDataApi.getTradeOperationTypes(),
         referenceDataApi.getSociedades(),
-        referenceDataApi.getCommodityGroups(),
         referenceDataApi.getDeliveryFormats(),
         referenceDataApi.getAdditives(),
         referenceDataApi.getBrokers(),
@@ -129,7 +124,6 @@ export default function ContractsPage() {
       setTradeOperationTypes(tradeTypesRes)
       setReferenceData({
         sociedades: sociedadesRes,
-        commodityGroups: commodityGroupsRes,
         deliveryFormats: deliveryFormatsRes,
         additives: additivesRes,
         brokers: brokersRes,
@@ -159,7 +153,6 @@ export default function ContractsPage() {
         sociedad: parseInt(formData.sociedad),
         counterparty: parseInt(formData.counterparty),
         commodity: parseInt(formData.commodity),
-        commodity_group: parseInt(formData.commodity_group),
         delivery_format: parseInt(formData.delivery_format),
         additive: parseInt(formData.additive),
         broker: parseInt(formData.broker),
@@ -221,7 +214,6 @@ export default function ContractsPage() {
       status: contract.status,
       trade_operation_type: contract.trade_operation_type.toString(),
       sociedad: contract.sociedad.toString(),
-      commodity_group: contract.commodity_group.toString(),
       delivery_format: contract.delivery_format.toString(),
       additive: contract.additive.toString(),
       broker: contract.broker.toString(),
@@ -272,7 +264,6 @@ export default function ContractsPage() {
       status: 'draft',
       trade_operation_type: '',
       sociedad: '',
-      commodity_group: '',
       delivery_format: '',
       additive: '',
       broker: '',
@@ -497,7 +488,7 @@ export default function ContractsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="sociedad">Sociedad *</Label>
                   <Select value={formData.sociedad} onValueChange={(value) => setFormData({ ...formData, sociedad: value })}>
@@ -507,19 +498,6 @@ export default function ContractsPage() {
                     <SelectContent>
                       {referenceData.sociedades.map(sociedad => (
                         <SelectItem key={sociedad.id} value={sociedad.id.toString()}>{sociedad.sociedad_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="commodity_group">Commodity Group *</Label>
-                  <Select value={formData.commodity_group} onValueChange={(value) => setFormData({ ...formData, commodity_group: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {referenceData.commodityGroups.map(group => (
-                        <SelectItem key={group.id} value={group.id.toString()}>{group.commodity_group_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

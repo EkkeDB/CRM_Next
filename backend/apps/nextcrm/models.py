@@ -59,6 +59,7 @@ class Commodity_Group(models.Model):
 
 class Commodity_Type(models.Model):
     commodity_type_name = models.CharField(max_length=50)
+    commodity_group = models.ForeignKey(Commodity_Group, on_delete=models.CASCADE, related_name='commodity_types')
     description = models.TextField(blank=True)
     
     class Meta:
@@ -67,11 +68,12 @@ class Commodity_Type(models.Model):
         verbose_name_plural = 'Commodity Types'
 
     def __str__(self):
-        return self.commodity_type_name
+        return f"{self.commodity_type_name} ({self.commodity_group.commodity_group_name})"
 
 
 class Commodity_Subtype(models.Model):
     commodity_subtype_name = models.CharField(max_length=50)
+    commodity_type = models.ForeignKey(Commodity_Type, on_delete=models.CASCADE, related_name='commodity_subtypes')
     description = models.TextField(blank=True)
     
     class Meta:
@@ -80,20 +82,28 @@ class Commodity_Subtype(models.Model):
         verbose_name_plural = 'Commodity Subtypes'
 
     def __str__(self):
-        return self.commodity_subtype_name
+        return f"{self.commodity_subtype_name} ({self.commodity_type.commodity_type_name})"
 
 
 class Commodity(models.Model):
     commodity_name_short = models.CharField(max_length=50)
     commodity_name_full = models.CharField(max_length=200, blank=True)
-    commodity_group = models.ForeignKey(Commodity_Group, on_delete=models.CASCADE)
-    commodity_type = models.ForeignKey(Commodity_Type, on_delete=models.CASCADE)
-    commodity_subtype = models.ForeignKey(Commodity_Subtype, on_delete=models.CASCADE)
+    commodity_subtype = models.ForeignKey(Commodity_Subtype, on_delete=models.CASCADE, related_name='commodities')
     unit_of_measure = models.CharField(max_length=20, default='MT')
     
     class Meta:
         db_table = 'commodities'
         verbose_name_plural = 'Commodities'
+
+    @property
+    def commodity_type(self):
+        """Get the commodity type through the subtype"""
+        return self.commodity_subtype.commodity_type
+    
+    @property
+    def commodity_group(self):
+        """Get the commodity group through the type"""
+        return self.commodity_subtype.commodity_type.commodity_group
 
     def __str__(self):
         return f"{self.commodity_name_short} - {self.commodity_group.commodity_group_name}"
@@ -219,7 +229,6 @@ class Contract(models.Model):
     sociedad = models.ForeignKey(Sociedad, on_delete=models.PROTECT)
     counterparty = models.ForeignKey(Counterparty, on_delete=models.PROTECT)
     commodity = models.ForeignKey(Commodity, on_delete=models.PROTECT)
-    commodity_group = models.ForeignKey(Commodity_Group, on_delete=models.PROTECT)
     delivery_format = models.ForeignKey(Delivery_Format, on_delete=models.PROTECT)
     additive = models.ForeignKey(Additive, on_delete=models.PROTECT)
     broker = models.ForeignKey(Broker, on_delete=models.PROTECT)
@@ -285,6 +294,21 @@ class Contract(models.Model):
         
         super().save(*args, **kwargs)
     
+    @property
+    def commodity_group(self):
+        """Get the commodity group through the commodity hierarchy"""
+        return self.commodity.commodity_group
+    
+    @property
+    def commodity_type(self):
+        """Get the commodity type through the commodity hierarchy"""
+        return self.commodity.commodity_type
+    
+    @property
+    def commodity_subtype(self):
+        """Get the commodity subtype through the commodity hierarchy"""
+        return self.commodity.commodity_subtype
+
     @property
     def total_value(self):
         """Calculate total contract value"""

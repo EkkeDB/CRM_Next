@@ -85,12 +85,12 @@ class CommoditySubtypeViewSet(viewsets.ModelViewSet):
 
 class CommodityViewSet(viewsets.ModelViewSet):
     queryset = Commodity.objects.select_related(
-        'commodity_group', 'commodity_type', 'commodity_subtype'
+        'commodity_subtype__commodity_type__commodity_group'
     ).all()
     serializer_class = CommoditySerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['commodity_group', 'commodity_type', 'commodity_subtype']
+    filterset_fields = ['commodity_subtype', 'commodity_subtype__commodity_type', 'commodity_subtype__commodity_type__commodity_group']
     search_fields = ['commodity_name_short', 'commodity_name_full']
     ordering = ['commodity_name_short']
 
@@ -175,13 +175,14 @@ class TradeOperationTypeViewSet(viewsets.ModelViewSet):
 
 class ContractViewSet(viewsets.ModelViewSet):
     queryset = Contract.objects.select_related(
-        'trader', 'counterparty', 'commodity', 'broker',
-        'trade_currency', 'broker_fee_currency'
+        'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type__commodity_group', 
+        'broker', 'trade_currency', 'broker_fee_currency'
     ).all()
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
-        'status', 'trader', 'counterparty', 'commodity_group',
+        'status', 'trader', 'counterparty', 'commodity',
+        'commodity__commodity_subtype__commodity_type__commodity_group',
         'trade_operation_type', 'date'
     ]
     search_fields = [

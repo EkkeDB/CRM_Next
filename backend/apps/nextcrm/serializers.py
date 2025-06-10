@@ -36,20 +36,25 @@ class CommodityGroupSerializer(serializers.ModelSerializer):
 
 
 class CommodityTypeSerializer(serializers.ModelSerializer):
+    commodity_group_name = serializers.CharField(source='commodity_group.commodity_group_name', read_only=True)
+    
     class Meta:
         model = Commodity_Type
         fields = '__all__'
 
 
 class CommoditySubtypeSerializer(serializers.ModelSerializer):
+    commodity_type_name = serializers.CharField(source='commodity_type.commodity_type_name', read_only=True)
+    commodity_group_name = serializers.CharField(source='commodity_type.commodity_group.commodity_group_name', read_only=True)
+    
     class Meta:
         model = Commodity_Subtype
         fields = '__all__'
 
 
 class CommoditySerializer(serializers.ModelSerializer):
-    commodity_group_name = serializers.CharField(source='commodity_group.commodity_group_name', read_only=True)
-    commodity_type_name = serializers.CharField(source='commodity_type.commodity_type_name', read_only=True)
+    commodity_group_name = serializers.CharField(source='commodity_subtype.commodity_type.commodity_group.commodity_group_name', read_only=True)
+    commodity_type_name = serializers.CharField(source='commodity_subtype.commodity_type.commodity_type_name', read_only=True)
     commodity_subtype_name = serializers.CharField(source='commodity_subtype.commodity_subtype_name', read_only=True)
     
     class Meta:
@@ -122,6 +127,9 @@ class ContractSerializer(serializers.ModelSerializer):
     trader_name = serializers.CharField(source='trader.trader_name', read_only=True)
     counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
     commodity_name = serializers.CharField(source='commodity.commodity_name_short', read_only=True)
+    commodity_group_name = serializers.CharField(source='commodity.commodity_subtype.commodity_type.commodity_group.commodity_group_name', read_only=True)
+    commodity_type_name = serializers.CharField(source='commodity.commodity_subtype.commodity_type.commodity_type_name', read_only=True)
+    commodity_subtype_name = serializers.CharField(source='commodity.commodity_subtype.commodity_subtype_name', read_only=True)
     broker_name = serializers.CharField(source='broker.broker_name', read_only=True)
     trade_currency_code = serializers.CharField(source='trade_currency.currency_code', read_only=True)
     broker_fee_currency_code = serializers.CharField(source='broker_fee_currency.currency_code', read_only=True)

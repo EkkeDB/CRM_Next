@@ -5,138 +5,58 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Briefcase, Building2, TrendingUp } from 'lucide-react'
+import { referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface CostCenter {
-  id: number
-  cost_center_code: string
-  cost_center_name: string
-  description: string
-  is_active: boolean
-  budget_allocated: number
-  budget_used: number
-  manager: string
-  department: string
-  created_at: string
-}
-
-// Mock data - replace with API calls
-const mockCostCenters: CostCenter[] = [
-  {
-    id: 1,
-    cost_center_code: 'CC001',
-    cost_center_name: 'Trading Operations',
-    description: 'Main trading desk operations and associated costs',
-    is_active: true,
-    budget_allocated: 1000000,
-    budget_used: 750000,
-    manager: 'John Smith',
-    department: 'Trading',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    cost_center_code: 'CC002',
-    cost_center_name: 'Risk Management',
-    description: 'Risk analysis and management activities',
-    is_active: true,
-    budget_allocated: 500000,
-    budget_used: 320000,
-    manager: 'Sarah Johnson',
-    department: 'Risk',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    cost_center_code: 'CC003',
-    cost_center_name: 'Logistics',
-    description: 'Transportation and logistics coordination',
-    is_active: true,
-    budget_allocated: 800000,
-    budget_used: 600000,
-    manager: 'Mike Davis',
-    department: 'Operations',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    cost_center_code: 'CC004',
-    cost_center_name: 'IT Infrastructure',
-    description: 'Technology and systems maintenance',
-    is_active: true,
-    budget_allocated: 300000,
-    budget_used: 180000,
-    manager: 'Lisa Chen',
-    department: 'IT',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 5,
-    cost_center_code: 'CC005',
-    cost_center_name: 'Marketing',
-    description: 'Marketing and business development activities',
-    is_active: false,
-    budget_allocated: 200000,
-    budget_used: 150000,
-    manager: 'Tom Wilson',
-    department: 'Marketing',
-    created_at: '2024-01-01'
-  }
-]
+import type { CostCenter } from '@/types'
 
 export default function CostCentersPage() {
-  const [costCenters, setCostCenters] = useState<CostCenter[]>(mockCostCenters)
-  const [loading, setLoading] = useState(false)
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCostCenter, setEditingCostCenter] = useState<CostCenter | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    cost_center_code: '',
     cost_center_name: '',
-    description: '',
-    is_active: true,
-    budget_allocated: 0,
-    budget_used: 0,
-    manager: '',
-    department: ''
+    description: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const data = await referenceDataApi.getCostCenters()
+      setCostCenters(data)
+    } catch (error) {
+      console.error('Error fetching cost centers:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch cost centers',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingCostCenter) {
-        // Update existing cost center
-        const updatedCostCenter = {
-          ...editingCostCenter,
-          ...formData,
-          id: editingCostCenter.id,
-          created_at: editingCostCenter.created_at
-        }
-        setCostCenters(costCenters.map(c => c.id === editingCostCenter.id ? updatedCostCenter : c))
-        toast({
-          title: 'Success',
-          description: 'Cost center updated successfully'
-        })
-      } else {
-        // Create new cost center
-        const newCostCenter: CostCenter = {
-          ...formData,
-          id: Math.max(...costCenters.map(c => c.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setCostCenters([...costCenters, newCostCenter])
-        toast({
-          title: 'Success',
-          description: 'Cost center created successfully'
-        })
-      }
+      // Note: API endpoints for cost center CRUD may not be implemented yet
+      toast({
+        title: 'Info',
+        description: 'Cost center create/update API endpoints not yet implemented',
+        variant: 'default'
+      })
+      
       setDialogOpen(false)
       setEditingCostCenter(null)
       resetForm()
@@ -153,14 +73,8 @@ export default function CostCentersPage() {
   const handleEdit = (costCenter: CostCenter) => {
     setEditingCostCenter(costCenter)
     setFormData({
-      cost_center_code: costCenter.cost_center_code,
       cost_center_name: costCenter.cost_center_name,
-      description: costCenter.description,
-      is_active: costCenter.is_active,
-      budget_allocated: costCenter.budget_allocated,
-      budget_used: costCenter.budget_used,
-      manager: costCenter.manager,
-      department: costCenter.department
+      description: costCenter.description
     })
     setDialogOpen(true)
   }
@@ -169,10 +83,10 @@ export default function CostCentersPage() {
     if (!confirm('Are you sure you want to delete this cost center?')) return
     
     try {
-      setCostCenters(costCenters.filter(c => c.id !== id))
       toast({
-        title: 'Success',
-        description: 'Cost center deleted successfully'
+        title: 'Info',
+        description: 'Cost center delete API endpoint not yet implemented',
+        variant: 'default'
       })
     } catch (error) {
       console.error('Error deleting cost center:', error)
@@ -186,41 +100,23 @@ export default function CostCentersPage() {
 
   const resetForm = () => {
     setFormData({
-      cost_center_code: '',
       cost_center_name: '',
-      description: '',
-      is_active: true,
-      budget_allocated: 0,
-      budget_used: 0,
-      manager: '',
-      department: ''
+      description: ''
     })
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
-
-  const getBudgetUtilization = (allocated: number, used: number) => {
-    if (allocated === 0) return 0
-    return Math.round((used / allocated) * 100)
-  }
-
   const filteredCostCenters = costCenters.filter(center =>
-    center.cost_center_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     center.cost_center_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    center.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    center.manager.toLowerCase().includes(searchTerm.toLowerCase())
+    center.description.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const activeCostCenters = costCenters.filter(c => c.is_active).length
-  const totalBudget = costCenters.reduce((sum, c) => sum + c.budget_allocated, 0)
-  const totalUsed = costCenters.reduce((sum, c) => sum + c.budget_used, 0)
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -251,29 +147,6 @@ export default function CostCentersPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="cost_center_code">Cost Center Code *</Label>
-                  <Input
-                    id="cost_center_code"
-                    value={formData.cost_center_code}
-                    onChange={(e) => setFormData({ ...formData, cost_center_code: e.target.value.toUpperCase() })}
-                    required
-                    placeholder="CC001"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="department">Department *</Label>
-                  <Input
-                    id="department"
-                    value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    required
-                    placeholder="Trading"
-                  />
-                </div>
-              </div>
-              
               <div>
                 <Label htmlFor="cost_center_name">Cost Center Name *</Label>
                 <Input
@@ -286,41 +159,6 @@ export default function CostCentersPage() {
               </div>
 
               <div>
-                <Label htmlFor="manager">Manager</Label>
-                <Input
-                  id="manager"
-                  value={formData.manager}
-                  onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                  placeholder="John Smith"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="budget_allocated">Budget Allocated</Label>
-                  <Input
-                    id="budget_allocated"
-                    type="number"
-                    step="1000"
-                    value={formData.budget_allocated}
-                    onChange={(e) => setFormData({ ...formData, budget_allocated: parseFloat(e.target.value) || 0 })}
-                    placeholder="1000000"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="budget_used">Budget Used</Label>
-                  <Input
-                    id="budget_used"
-                    type="number"
-                    step="1000"
-                    value={formData.budget_used}
-                    onChange={(e) => setFormData({ ...formData, budget_used: parseFloat(e.target.value) || 0 })}
-                    placeholder="750000"
-                  />
-                </div>
-              </div>
-
-              <div>
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
@@ -328,17 +166,6 @@ export default function CostCentersPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description of cost center activities..."
                 />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active Cost Center</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -372,8 +199,10 @@ export default function CostCentersPage() {
             <div className="flex items-center space-x-2">
               <Building2 className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Centers</p>
-                <p className="text-2xl font-bold">{activeCostCenters}</p>
+                <p className="text-sm font-medium text-muted-foreground">With Description</p>
+                <p className="text-2xl font-bold">
+                  {costCenters.filter(c => c.description && c.description.trim()).length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -383,8 +212,10 @@ export default function CostCentersPage() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-8 w-8 text-orange-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Budget</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalBudget)}</p>
+                <p className="text-sm font-medium text-muted-foreground">Most Recent</p>
+                <p className="text-lg font-bold">
+                  {costCenters.length > 0 ? costCenters[costCenters.length - 1].cost_center_name : 'N/A'}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -392,10 +223,10 @@ export default function CostCentersPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <TrendingUp className="h-8 w-8 text-red-600" />
+              <TrendingUp className="h-8 w-8 text-purple-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Budget Utilization</p>
-                <p className="text-2xl font-bold">{getBudgetUtilization(totalBudget, totalUsed)}%</p>
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
+                <p className="text-2xl font-bold">Active</p>
               </div>
             </div>
           </CardContent>
@@ -434,72 +265,53 @@ export default function CostCentersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code & Name</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Manager</TableHead>
-                <TableHead>Budget</TableHead>
-                <TableHead>Utilization</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Cost Center Name</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCostCenters.map((center) => {
-                const utilization = getBudgetUtilization(center.budget_allocated, center.budget_used)
-                return (
-                  <TableRow key={center.id}>
-                    <TableCell>
+              {filteredCostCenters.map((center) => (
+                <TableRow key={center.id}>
+                  <TableCell>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                        <Briefcase className="h-5 w-5 text-purple-600" />
+                      </div>
                       <div>
-                        <div className="font-medium">{center.cost_center_code}</div>
-                        <div className="text-sm text-muted-foreground">{center.cost_center_name}</div>
+                        <div className="font-medium">{center.cost_center_name}</div>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{center.department}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {center.manager || <span className="text-muted-foreground">Unassigned</span>}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{formatCurrency(center.budget_allocated)}</div>
-                        <div className="text-sm text-muted-foreground">
-                          Used: {formatCurrency(center.budget_used)}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full ${
-                              utilization > 90 ? 'bg-red-500' : 
-                              utilization > 75 ? 'bg-yellow-500' : 'bg-green-500'
-                            }`}
-                            style={{ width: `${Math.min(utilization, 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-medium">{utilization}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={center.is_active ? "default" : "secondary"}>
-                        {center.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(center)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDelete(center.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-xs">
+                      <p className="text-sm text-muted-foreground truncate">
+                        {center.description || 'No description provided'}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm text-muted-foreground">#{center.id}</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(center)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDelete(center.id)}
+                        disabled
+                        title="Delete functionality not yet implemented"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
           {filteredCostCenters.length === 0 && (
@@ -509,6 +321,18 @@ export default function CostCentersPage() {
               <p className="text-sm text-gray-400">Try adjusting your search</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Note */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Briefcase className="h-4 w-4" />
+            <span>
+              Cost center data is loaded from the database. Create/Update/Delete operations require API implementation.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>

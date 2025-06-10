@@ -93,26 +93,29 @@ export interface CommodityGroup {
 export interface CommodityType {
   id: number
   commodity_type_name: string
+  commodity_group: number
   description: string
+  commodity_group_name?: string
 }
 
 export interface CommoditySubtype {
   id: number
   commodity_subtype_name: string
+  commodity_type: number
   description: string
+  commodity_type_name?: string
+  commodity_group_name?: string
 }
 
 export interface Commodity {
   id: number
   commodity_name_short: string
   commodity_name_full: string
-  commodity_group: number
-  commodity_type: number
   commodity_subtype: number
   unit_of_measure: string
-  commodity_group_name?: string
-  commodity_type_name?: string
   commodity_subtype_name?: string
+  commodity_type_name?: string
+  commodity_group_name?: string
 }
 
 export interface CounterpartyFacility {
@@ -195,7 +198,6 @@ export interface Contract {
   sociedad: number
   counterparty: number
   commodity: number
-  commodity_group: number
   delivery_format: number
   additive: number
   broker: number
@@ -222,6 +224,9 @@ export interface Contract {
   trader_name?: string
   counterparty_name?: string
   commodity_name?: string
+  commodity_group_name?: string
+  commodity_type_name?: string
+  commodity_subtype_name?: string
   broker_name?: string
   trade_currency_code?: string
   broker_fee_currency_code?: string
@@ -236,7 +241,6 @@ export interface ContractCreateData {
   sociedad: number
   counterparty: number
   commodity: number
-  commodity_group: number
   delivery_format: number
   additive: number
   broker: number

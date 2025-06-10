@@ -5,74 +5,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Plus, Search, Edit, Trash2, DollarSign, TrendingUp, Globe } from 'lucide-react'
+import { referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface Currency {
-  id: number
-  currency_code: string
-  currency_name: string
-  symbol: string
-  is_active: boolean
-  exchange_rate: number
-  created_at: string
-}
-
-// Mock data - replace with API calls
-const mockCurrencies: Currency[] = [
-  {
-    id: 1,
-    currency_code: 'USD',
-    currency_name: 'US Dollar',
-    symbol: '$',
-    is_active: true,
-    exchange_rate: 1.0,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    currency_code: 'EUR',
-    currency_name: 'Euro',
-    symbol: '€',
-    is_active: true,
-    exchange_rate: 0.85,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    currency_code: 'GBP',
-    currency_name: 'British Pound',
-    symbol: '£',
-    is_active: true,
-    exchange_rate: 0.73,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    currency_code: 'JPY',
-    currency_name: 'Japanese Yen',
-    symbol: '¥',
-    is_active: true,
-    exchange_rate: 110.0,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 5,
-    currency_code: 'CAD',
-    currency_name: 'Canadian Dollar',
-    symbol: 'C$',
-    is_active: false,
-    exchange_rate: 1.25,
-    created_at: '2024-01-01'
-  }
-]
+import type { Currency } from '@/types'
 
 export default function CurrenciesPage() {
-  const [currencies, setCurrencies] = useState<Currency[]>(mockCurrencies)
-  const [loading, setLoading] = useState(false)
+  const [currencies, setCurrencies] = useState<Currency[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null)
@@ -81,40 +23,40 @@ export default function CurrenciesPage() {
   const [formData, setFormData] = useState({
     currency_code: '',
     currency_name: '',
-    symbol: '',
-    is_active: true,
-    exchange_rate: 1.0
+    currency_symbol: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const data = await referenceDataApi.getCurrencies()
+      setCurrencies(data)
+    } catch (error) {
+      console.error('Error fetching currencies:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch currencies',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingCurrency) {
-        // Update existing currency
-        const updatedCurrency = {
-          ...editingCurrency,
-          ...formData,
-          id: editingCurrency.id,
-          created_at: editingCurrency.created_at
-        }
-        setCurrencies(currencies.map(c => c.id === editingCurrency.id ? updatedCurrency : c))
-        toast({
-          title: 'Success',
-          description: 'Currency updated successfully'
-        })
-      } else {
-        // Create new currency
-        const newCurrency: Currency = {
-          ...formData,
-          id: Math.max(...currencies.map(c => c.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setCurrencies([...currencies, newCurrency])
-        toast({
-          title: 'Success',
-          description: 'Currency created successfully'
-        })
-      }
+      // Note: API endpoints for currency CRUD may not be implemented yet
+      toast({
+        title: 'Info',
+        description: 'Currency create/update API endpoints not yet implemented',
+        variant: 'default'
+      })
+      
       setDialogOpen(false)
       setEditingCurrency(null)
       resetForm()
@@ -133,9 +75,7 @@ export default function CurrenciesPage() {
     setFormData({
       currency_code: currency.currency_code,
       currency_name: currency.currency_name,
-      symbol: currency.symbol,
-      is_active: currency.is_active,
-      exchange_rate: currency.exchange_rate
+      currency_symbol: currency.currency_symbol || ''
     })
     setDialogOpen(true)
   }
@@ -144,10 +84,10 @@ export default function CurrenciesPage() {
     if (!confirm('Are you sure you want to delete this currency?')) return
     
     try {
-      setCurrencies(currencies.filter(c => c.id !== id))
       toast({
-        title: 'Success',
-        description: 'Currency deleted successfully'
+        title: 'Info',
+        description: 'Currency delete API endpoint not yet implemented',
+        variant: 'default'
       })
     } catch (error) {
       console.error('Error deleting currency:', error)
@@ -163,9 +103,7 @@ export default function CurrenciesPage() {
     setFormData({
       currency_code: '',
       currency_name: '',
-      symbol: '',
-      is_active: true,
-      exchange_rate: 1.0
+      currency_symbol: ''
     })
   }
 
@@ -174,8 +112,13 @@ export default function CurrenciesPage() {
     currency.currency_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const activeCurrencies = currencies.filter(c => c.is_active).length
-  const averageRate = currencies.reduce((sum, c) => sum + c.exchange_rate, 0) / currencies.length
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -230,38 +173,13 @@ export default function CurrenciesPage() {
               </div>
 
               <div>
-                <Label htmlFor="symbol">Symbol *</Label>
+                <Label htmlFor="currency_symbol">Symbol</Label>
                 <Input
-                  id="symbol"
-                  value={formData.symbol}
-                  onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
-                  required
+                  id="currency_symbol"
+                  value={formData.currency_symbol}
+                  onChange={(e) => setFormData({ ...formData, currency_symbol: e.target.value })}
                   placeholder="$"
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="exchange_rate">Exchange Rate (to USD) *</Label>
-                <Input
-                  id="exchange_rate"
-                  type="number"
-                  step="0.0001"
-                  value={formData.exchange_rate}
-                  onChange={(e) => setFormData({ ...formData, exchange_rate: parseFloat(e.target.value) || 0 })}
-                  required
-                  placeholder="1.0000"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active Currency</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -295,8 +213,10 @@ export default function CurrenciesPage() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Currencies</p>
-                <p className="text-2xl font-bold">{activeCurrencies}</p>
+                <p className="text-sm font-medium text-muted-foreground">Major Currencies</p>
+                <p className="text-2xl font-bold">
+                  {currencies.filter(c => ['USD', 'EUR', 'GBP', 'JPY'].includes(c.currency_code)).length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -317,8 +237,10 @@ export default function CurrenciesPage() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-8 w-8 text-purple-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg Exchange Rate</p>
-                <p className="text-2xl font-bold">{averageRate.toFixed(2)}</p>
+                <p className="text-sm font-medium text-muted-foreground">Most Recent</p>
+                <p className="text-lg font-bold">
+                  {currencies.length > 0 ? currencies[currencies.length - 1].currency_code : 'N/A'}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -350,7 +272,7 @@ export default function CurrenciesPage() {
             <span>Currencies ({filteredCurrencies.length})</span>
           </CardTitle>
           <CardDescription>
-            Manage currency codes, names, symbols, and exchange rates
+            Manage currency codes, names, and symbols for trading operations
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -360,9 +282,6 @@ export default function CurrenciesPage() {
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Symbol</TableHead>
-                <TableHead>Exchange Rate</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -379,25 +298,20 @@ export default function CurrenciesPage() {
                   </TableCell>
                   <TableCell>{currency.currency_name}</TableCell>
                   <TableCell>
-                    <span className="text-lg font-medium">{currency.symbol}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono">{currency.exchange_rate.toFixed(4)}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={currency.is_active ? "default" : "secondary"}>
-                      {currency.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(currency.created_at).toLocaleDateString()}
+                    <span className="text-lg font-medium">{currency.currency_symbol || '-'}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
                       <Button variant="outline" size="sm" onClick={() => handleEdit(currency)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(currency.id)}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDelete(currency.id)}
+                        disabled
+                        title="Delete functionality not yet implemented"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -413,6 +327,18 @@ export default function CurrenciesPage() {
               <p className="text-sm text-gray-400">Try adjusting your search</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Note */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Globe className="h-4 w-4" />
+            <span>
+              Currency data is loaded from the database. Create/Update/Delete operations require API implementation.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>

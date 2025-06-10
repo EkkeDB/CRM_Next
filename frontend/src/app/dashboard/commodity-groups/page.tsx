@@ -5,127 +5,58 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Layers, Package2, TrendingUp, BarChart3 } from 'lucide-react'
+import { referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface CommodityGroup {
-  id: number
-  group_code: string
-  group_name: string
-  description: string
-  is_active: boolean
-  commodity_count: number
-  created_at: string
-}
-
-// Mock data - replace with API calls
-const mockCommodityGroups: CommodityGroup[] = [
-  {
-    id: 1,
-    group_code: 'METALS',
-    group_name: 'Metals',
-    description: 'Precious and base metals including gold, silver, copper, and aluminum',
-    is_active: true,
-    commodity_count: 12,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    group_code: 'ENERGY',
-    group_name: 'Energy',
-    description: 'Oil, gas, coal, and renewable energy commodities',
-    is_active: true,
-    commodity_count: 8,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    group_code: 'AGRI',
-    group_name: 'Agriculture',
-    description: 'Grains, livestock, dairy, and other agricultural products',
-    is_active: true,
-    commodity_count: 25,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    group_code: 'SOFT',
-    group_name: 'Soft Commodities',
-    description: 'Coffee, cocoa, sugar, cotton, and other soft commodities',
-    is_active: true,
-    commodity_count: 10,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 5,
-    group_code: 'CHEM',
-    group_name: 'Chemicals',
-    description: 'Industrial chemicals, fertilizers, and chemical products',
-    is_active: true,
-    commodity_count: 15,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 6,
-    group_code: 'RARE',
-    group_name: 'Rare Earth Elements',
-    description: 'Rare earth metals and elements used in technology',
-    is_active: false,
-    commodity_count: 3,
-    created_at: '2024-01-01'
-  }
-]
+import type { CommodityGroup } from '@/types'
 
 export default function CommodityGroupsPage() {
-  const [commodityGroups, setCommodityGroups] = useState<CommodityGroup[]>(mockCommodityGroups)
-  const [loading, setLoading] = useState(false)
+  const [commodityGroups, setCommodityGroups] = useState<CommodityGroup[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<CommodityGroup | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    group_code: '',
-    group_name: '',
-    description: '',
-    is_active: true
+    commodity_group_name: '',
+    description: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const data = await referenceDataApi.getCommodityGroups()
+      setCommodityGroups(data)
+    } catch (error) {
+      console.error('Error fetching commodity groups:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch commodity groups',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingGroup) {
-        // Update existing group
-        const updatedGroup = {
-          ...editingGroup,
-          ...formData,
-          id: editingGroup.id,
-          created_at: editingGroup.created_at,
-          commodity_count: editingGroup.commodity_count
-        }
-        setCommodityGroups(commodityGroups.map(g => g.id === editingGroup.id ? updatedGroup : g))
-        toast({
-          title: 'Success',
-          description: 'Commodity group updated successfully'
-        })
-      } else {
-        // Create new group
-        const newGroup: CommodityGroup = {
-          ...formData,
-          id: Math.max(...commodityGroups.map(g => g.id)) + 1,
-          commodity_count: 0,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setCommodityGroups([...commodityGroups, newGroup])
-        toast({
-          title: 'Success',
-          description: 'Commodity group created successfully'
-        })
-      }
+      // Note: API endpoints for commodity group CRUD may not be implemented yet
+      toast({
+        title: 'Info',
+        description: 'Commodity group create/update API endpoints not yet implemented',
+        variant: 'default'
+      })
+      
       setDialogOpen(false)
       setEditingGroup(null)
       resetForm()
@@ -142,10 +73,8 @@ export default function CommodityGroupsPage() {
   const handleEdit = (group: CommodityGroup) => {
     setEditingGroup(group)
     setFormData({
-      group_code: group.group_code,
-      group_name: group.group_name,
-      description: group.description,
-      is_active: group.is_active
+      commodity_group_name: group.commodity_group_name,
+      description: group.description
     })
     setDialogOpen(true)
   }
@@ -154,10 +83,10 @@ export default function CommodityGroupsPage() {
     if (!confirm('Are you sure you want to delete this commodity group?')) return
     
     try {
-      setCommodityGroups(commodityGroups.filter(g => g.id !== id))
       toast({
-        title: 'Success',
-        description: 'Commodity group deleted successfully'
+        title: 'Info',
+        description: 'Commodity group delete API endpoint not yet implemented',
+        variant: 'default'
       })
     } catch (error) {
       console.error('Error deleting commodity group:', error)
@@ -171,21 +100,23 @@ export default function CommodityGroupsPage() {
 
   const resetForm = () => {
     setFormData({
-      group_code: '',
-      group_name: '',
-      description: '',
-      is_active: true
+      commodity_group_name: '',
+      description: ''
     })
   }
 
   const filteredGroups = commodityGroups.filter(group =>
-    group.group_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    group.group_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    group.commodity_group_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     group.description.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const activeGroups = commodityGroups.filter(g => g.is_active).length
-  const totalCommodities = commodityGroups.reduce((sum, g) => sum + g.commodity_count, 0)
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -217,22 +148,11 @@ export default function CommodityGroupsPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="group_code">Group Code *</Label>
+                <Label htmlFor="commodity_group_name">Group Name *</Label>
                 <Input
-                  id="group_code"
-                  value={formData.group_code}
-                  onChange={(e) => setFormData({ ...formData, group_code: e.target.value.toUpperCase() })}
-                  required
-                  placeholder="METALS"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="group_name">Group Name *</Label>
-                <Input
-                  id="group_name"
-                  value={formData.group_name}
-                  onChange={(e) => setFormData({ ...formData, group_name: e.target.value })}
+                  id="commodity_group_name"
+                  value={formData.commodity_group_name}
+                  onChange={(e) => setFormData({ ...formData, commodity_group_name: e.target.value })}
                   required
                   placeholder="Metals"
                 />
@@ -246,17 +166,6 @@ export default function CommodityGroupsPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description of the commodity group..."
                 />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active Group</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -290,8 +199,10 @@ export default function CommodityGroupsPage() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Groups</p>
-                <p className="text-2xl font-bold">{activeGroups}</p>
+                <p className="text-sm font-medium text-muted-foreground">With Description</p>
+                <p className="text-2xl font-bold">
+                  {commodityGroups.filter(g => g.description && g.description.trim()).length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -301,8 +212,10 @@ export default function CommodityGroupsPage() {
             <div className="flex items-center space-x-2">
               <Package2 className="h-8 w-8 text-orange-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Commodities</p>
-                <p className="text-2xl font-bold">{totalCommodities}</p>
+                <p className="text-sm font-medium text-muted-foreground">Most Recent</p>
+                <p className="text-lg font-bold">
+                  {commodityGroups.length > 0 ? commodityGroups[commodityGroups.length - 1].commodity_group_name : 'N/A'}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -312,10 +225,8 @@ export default function CommodityGroupsPage() {
             <div className="flex items-center space-x-2">
               <BarChart3 className="h-8 w-8 text-purple-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Avg per Group</p>
-                <p className="text-2xl font-bold">
-                  {commodityGroups.length > 0 ? Math.round(totalCommodities / commodityGroups.length) : 0}
-                </p>
+                <p className="text-sm font-medium text-muted-foreground">Categories</p>
+                <p className="text-2xl font-bold">Active</p>
               </div>
             </div>
           </CardContent>
@@ -354,11 +265,9 @@ export default function CommodityGroupsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Group</TableHead>
+                <TableHead>Group Name</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Commodities</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -371,8 +280,7 @@ export default function CommodityGroupsPage() {
                         <Layers className="h-5 w-5 text-indigo-600" />
                       </div>
                       <div>
-                        <div className="font-medium">{group.group_code}</div>
-                        <div className="text-sm text-muted-foreground">{group.group_name}</div>
+                        <div className="font-medium">{group.commodity_group_name}</div>
                       </div>
                     </div>
                   </TableCell>
@@ -384,25 +292,20 @@ export default function CommodityGroupsPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Package2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{group.commodity_count}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={group.is_active ? "default" : "secondary"}>
-                      {group.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(group.created_at).toLocaleDateString()}
+                    <span className="text-sm text-muted-foreground">#{group.id}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
                       <Button variant="outline" size="sm" onClick={() => handleEdit(group)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(group.id)}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDelete(group.id)}
+                        disabled
+                        title="Delete functionality not yet implemented"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -418,6 +321,18 @@ export default function CommodityGroupsPage() {
               <p className="text-sm text-gray-400">Try adjusting your search</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Note */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Layers className="h-4 w-4" />
+            <span>
+              Commodity group data is loaded from the database. Create/Update/Delete operations require API implementation.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>

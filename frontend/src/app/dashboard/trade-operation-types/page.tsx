@@ -1,150 +1,126 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, Edit, Trash2, Shuffle } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Shuffle, TrendingUp } from 'lucide-react'
+import { referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface TradeOperationType {
-  id: number
-  operation_code: string
-  operation_name: string
-  description: string
-  operation_category: 'purchase' | 'sale' | 'swap' | 'forward'
-  is_active: boolean
-  created_at: string
-}
-
-const mockTradeOperationTypes: TradeOperationType[] = [
-  {
-    id: 1,
-    operation_code: 'SPOT_BUY',
-    operation_name: 'Spot Purchase',
-    description: 'Immediate purchase of commodities for spot delivery',
-    operation_category: 'purchase',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    operation_code: 'SPOT_SELL',
-    operation_name: 'Spot Sale',
-    description: 'Immediate sale of commodities for spot delivery',
-    operation_category: 'sale',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    operation_code: 'FWD_BUY',
-    operation_name: 'Forward Purchase',
-    description: 'Purchase agreement for future delivery',
-    operation_category: 'forward',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    operation_code: 'FWD_SELL',
-    operation_name: 'Forward Sale',
-    description: 'Sale agreement for future delivery',
-    operation_category: 'forward',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 5,
-    operation_code: 'SWAP',
-    operation_name: 'Commodity Swap',
-    description: 'Exchange of one commodity for another',
-    operation_category: 'swap',
-    is_active: true,
-    created_at: '2024-01-01'
-  }
-]
-
-const categoryOptions = [
-  { value: 'purchase', label: 'Purchase' },
-  { value: 'sale', label: 'Sale' },
-  { value: 'swap', label: 'Swap' },
-  { value: 'forward', label: 'Forward' }
-]
+import type { TradeOperationType } from '@/types'
 
 export default function TradeOperationTypesPage() {
-  const [operationTypes, setOperationTypes] = useState<TradeOperationType[]>(mockTradeOperationTypes)
+  const [operationTypes, setOperationTypes] = useState<TradeOperationType[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingOperationType, setEditingOperationType] = useState<TradeOperationType | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
+    trade_operation_type_name: '',
     operation_code: '',
-    operation_name: '',
-    description: '',
-    operation_category: 'purchase' as TradeOperationType['operation_category'],
-    is_active: true
+    description: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const data = await referenceDataApi.getTradeOperationTypes()
+      setOperationTypes(data)
+    } catch (error) {
+      console.error('Error fetching trade operation types:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch trade operation types',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingOperationType) {
-        const updated = {
-          ...editingOperationType,
-          ...formData,
-          id: editingOperationType.id,
-          created_at: editingOperationType.created_at
-        }
-        setOperationTypes(operationTypes.map(o => o.id === editingOperationType.id ? updated : o))
-        toast({ title: 'Success', description: 'Trade operation type updated successfully' })
-      } else {
-        const newOperationType: TradeOperationType = {
-          ...formData,
-          id: Math.max(...operationTypes.map(o => o.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setOperationTypes([...operationTypes, newOperationType])
-        toast({ title: 'Success', description: 'Trade operation type created successfully' })
-      }
+      // Note: API endpoints for trade operation type CRUD may not be implemented yet
+      toast({
+        title: 'Info',
+        description: 'Trade operation type create/update API endpoints not yet implemented',
+        variant: 'default'
+      })
+      
       setDialogOpen(false)
       setEditingOperationType(null)
       resetForm()
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save trade operation type', variant: 'destructive' })
+      console.error('Error saving trade operation type:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to save trade operation type',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleEdit = (operationType: TradeOperationType) => {
+    setEditingOperationType(operationType)
+    setFormData({
+      trade_operation_type_name: operationType.trade_operation_type_name,
+      operation_code: operationType.operation_code,
+      description: operationType.description
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this trade operation type?')) return
+    
+    try {
+      toast({
+        title: 'Info',
+        description: 'Trade operation type delete API endpoint not yet implemented',
+        variant: 'default'
+      })
+    } catch (error) {
+      console.error('Error deleting trade operation type:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete trade operation type',
+        variant: 'destructive'
+      })
     }
   }
 
   const resetForm = () => {
     setFormData({
+      trade_operation_type_name: '',
       operation_code: '',
-      operation_name: '',
-      description: '',
-      operation_category: 'purchase',
-      is_active: true
+      description: ''
     })
-  }
-
-  const getCategoryBadgeVariant = (category: string) => {
-    switch (category) {
-      case 'purchase': return 'default'
-      case 'sale': return 'secondary'
-      case 'swap': return 'outline'
-      case 'forward': return 'destructive'
-      default: return 'outline'
-    }
   }
 
   const filteredOperationTypes = operationTypes.filter(operationType =>
     operationType.operation_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    operationType.operation_name.toLowerCase().includes(searchTerm.toLowerCase())
+    operationType.trade_operation_type_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    operationType.description.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -171,59 +147,35 @@ export default function TradeOperationTypesPage() {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Operation Code *</Label>
-                  <Input
-                    value={formData.operation_code}
-                    onChange={(e) => setFormData({ ...formData, operation_code: e.target.value.toUpperCase() })}
-                    required
-                    placeholder="SPOT_BUY"
-                  />
-                </div>
-                <div>
-                  <Label>Category *</Label>
-                  <select
-                    value={formData.operation_category}
-                    onChange={(e) => setFormData({ ...formData, operation_category: e.target.value as TradeOperationType['operation_category'] })}
-                    className="w-full p-2 border rounded"
-                    required
-                  >
-                    {categoryOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              
               <div>
-                <Label>Operation Name *</Label>
+                <Label htmlFor="trade_operation_type_name">Operation Name *</Label>
                 <Input
-                  value={formData.operation_name}
-                  onChange={(e) => setFormData({ ...formData, operation_name: e.target.value })}
+                  id="trade_operation_type_name"
+                  value={formData.trade_operation_type_name}
+                  onChange={(e) => setFormData({ ...formData, trade_operation_type_name: e.target.value })}
                   required
                   placeholder="Spot Purchase"
                 />
               </div>
 
               <div>
-                <Label>Description</Label>
+                <Label htmlFor="operation_code">Operation Code</Label>
+                <Input
+                  id="operation_code"
+                  value={formData.operation_code}
+                  onChange={(e) => setFormData({ ...formData, operation_code: e.target.value.toUpperCase() })}
+                  placeholder="SPOT_BUY"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
+                  id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description of the trade operation type..."
                 />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -237,6 +189,58 @@ export default function TradeOperationTypesPage() {
             </form>
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Shuffle className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Operation Types</p>
+                <p className="text-2xl font-bold">{operationTypes.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-8 w-8 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">With Code</p>
+                <p className="text-2xl font-bold">
+                  {operationTypes.filter(o => o.operation_code && o.operation_code.trim()).length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Shuffle className="h-8 w-8 text-orange-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">With Description</p>
+                <p className="text-2xl font-bold">
+                  {operationTypes.filter(o => o.description && o.description.trim()).length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-8 w-8 text-purple-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
+                <p className="text-2xl font-bold">Active</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="mb-6">
@@ -261,51 +265,51 @@ export default function TradeOperationTypesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Operation Name</TableHead>
                 <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredOperationTypes.map((operationType) => (
                 <TableRow key={operationType.id}>
-                  <TableCell className="font-medium">{operationType.operation_code}</TableCell>
-                  <TableCell>{operationType.operation_name}</TableCell>
                   <TableCell>
-                    <Badge variant={getCategoryBadgeVariant(operationType.operation_category)}>
-                      {operationType.operation_category}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {operationType.description || 'No description'}
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-pink-100 rounded-full flex items-center justify-center">
+                        <Shuffle className="h-5 w-5 text-pink-600" />
+                      </div>
+                      <div>
+                        <div className="font-medium">{operationType.trade_operation_type_name}</div>
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={operationType.is_active ? "default" : "secondary"}>
-                      {operationType.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                    <span className="font-mono text-sm">{operationType.operation_code || 'N/A'}</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-xs">
+                      <p className="text-sm text-muted-foreground truncate">
+                        {operationType.description || 'No description provided'}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm text-muted-foreground">#{operationType.id}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setEditingOperationType(operationType)
-                        setFormData({
-                          operation_code: operationType.operation_code,
-                          operation_name: operationType.operation_name,
-                          description: operationType.description,
-                          operation_category: operationType.operation_category,
-                          is_active: operationType.is_active
-                        })
-                        setDialogOpen(true)
-                      }}>
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(operationType)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setOperationTypes(operationTypes.filter(o => o.id !== operationType.id))
-                        toast({ title: 'Success', description: 'Trade operation type deleted successfully' })
-                      }}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDelete(operationType.id)}
+                        disabled
+                        title="Delete functionality not yet implemented"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -314,6 +318,18 @@ export default function TradeOperationTypesPage() {
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Note */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Shuffle className="h-4 w-4" />
+            <span>
+              Trade operation type data is loaded from the database. Create/Update/Delete operations require API implementation.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>

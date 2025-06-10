@@ -1,128 +1,126 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, Edit, Trash2, Building2 } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Building2, TrendingUp } from 'lucide-react'
+import { referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface Sociedad {
-  id: number
-  sociedad_code: string
-  sociedad_name: string
-  legal_name: string
-  tax_id: string
-  country: string
-  is_active: boolean
-  description: string
-  created_at: string
-}
-
-const mockSociedades: Sociedad[] = [
-  {
-    id: 1,
-    sociedad_code: 'MAIN',
-    sociedad_name: 'Main Trading Entity',
-    legal_name: 'NextCRM Trading Corp',
-    tax_id: 'TC123456789',
-    country: 'USA',
-    is_active: true,
-    description: 'Primary trading entity for commodity operations',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    sociedad_code: 'EUR',
-    sociedad_name: 'European Subsidiary',
-    legal_name: 'NextCRM Europe Ltd',
-    tax_id: 'EU987654321',
-    country: 'Netherlands',
-    is_active: true,
-    description: 'European operations and trading entity',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    sociedad_code: 'ASIA',
-    sociedad_name: 'Asian Operations',
-    legal_name: 'NextCRM Asia Pte Ltd',
-    tax_id: 'AS555666777',
-    country: 'Singapore',
-    is_active: true,
-    description: 'Asian market operations and trading',
-    created_at: '2024-01-01'
-  }
-]
+import type { Sociedad } from '@/types'
 
 export default function SociedadesPage() {
-  const [sociedades, setSociedades] = useState<Sociedad[]>(mockSociedades)
+  const [sociedades, setSociedades] = useState<Sociedad[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingSociedad, setEditingSociedad] = useState<Sociedad | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    sociedad_code: '',
     sociedad_name: '',
-    legal_name: '',
     tax_id: '',
-    country: '',
-    description: '',
-    is_active: true
+    address: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const data = await referenceDataApi.getSociedades()
+      setSociedades(data)
+    } catch (error) {
+      console.error('Error fetching sociedades:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch sociedades',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingSociedad) {
-        const updated = {
-          ...editingSociedad,
-          ...formData,
-          id: editingSociedad.id,
-          created_at: editingSociedad.created_at
-        }
-        setSociedades(sociedades.map(s => s.id === editingSociedad.id ? updated : s))
-        toast({ title: 'Success', description: 'Sociedad updated successfully' })
-      } else {
-        const newSociedad: Sociedad = {
-          ...formData,
-          id: Math.max(...sociedades.map(s => s.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setSociedades([...sociedades, newSociedad])
-        toast({ title: 'Success', description: 'Sociedad created successfully' })
-      }
+      // Note: API endpoints for sociedad CRUD may not be implemented yet
+      toast({
+        title: 'Info',
+        description: 'Sociedad create/update API endpoints not yet implemented',
+        variant: 'default'
+      })
+      
       setDialogOpen(false)
       setEditingSociedad(null)
       resetForm()
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save sociedad', variant: 'destructive' })
+      console.error('Error saving sociedad:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to save sociedad',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleEdit = (sociedad: Sociedad) => {
+    setEditingSociedad(sociedad)
+    setFormData({
+      sociedad_name: sociedad.sociedad_name,
+      tax_id: sociedad.tax_id,
+      address: sociedad.address
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this sociedad?')) return
+    
+    try {
+      toast({
+        title: 'Info',
+        description: 'Sociedad delete API endpoint not yet implemented',
+        variant: 'default'
+      })
+    } catch (error) {
+      console.error('Error deleting sociedad:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete sociedad',
+        variant: 'destructive'
+      })
     }
   }
 
   const resetForm = () => {
     setFormData({
-      sociedad_code: '',
       sociedad_name: '',
-      legal_name: '',
       tax_id: '',
-      country: '',
-      description: '',
-      is_active: true
+      address: ''
     })
   }
 
   const filteredSociedades = sociedades.filter(sociedad =>
-    sociedad.sociedad_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     sociedad.sociedad_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sociedad.legal_name.toLowerCase().includes(searchTerm.toLowerCase())
+    sociedad.tax_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    sociedad.address.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -149,30 +147,10 @@ export default function SociedadesPage() {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Sociedad Code *</Label>
-                  <Input
-                    value={formData.sociedad_code}
-                    onChange={(e) => setFormData({ ...formData, sociedad_code: e.target.value.toUpperCase() })}
-                    required
-                    placeholder="MAIN"
-                  />
-                </div>
-                <div>
-                  <Label>Country *</Label>
-                  <Input
-                    value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    required
-                    placeholder="USA"
-                  />
-                </div>
-              </div>
-              
               <div>
-                <Label>Sociedad Name *</Label>
+                <Label htmlFor="sociedad_name">Sociedad Name *</Label>
                 <Input
+                  id="sociedad_name"
                   value={formData.sociedad_name}
                   onChange={(e) => setFormData({ ...formData, sociedad_name: e.target.value })}
                   required
@@ -181,18 +159,9 @@ export default function SociedadesPage() {
               </div>
 
               <div>
-                <Label>Legal Name *</Label>
+                <Label htmlFor="tax_id">Tax ID</Label>
                 <Input
-                  value={formData.legal_name}
-                  onChange={(e) => setFormData({ ...formData, legal_name: e.target.value })}
-                  required
-                  placeholder="NextCRM Trading Corp"
-                />
-              </div>
-
-              <div>
-                <Label>Tax ID</Label>
-                <Input
+                  id="tax_id"
                   value={formData.tax_id}
                   onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
                   placeholder="TC123456789"
@@ -200,23 +169,13 @@ export default function SociedadesPage() {
               </div>
 
               <div>
-                <Label>Description</Label>
+                <Label htmlFor="address">Address</Label>
                 <Textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Description of the legal entity..."
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Full address of the legal entity..."
                 />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -230,6 +189,58 @@ export default function SociedadesPage() {
             </form>
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Building2 className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Sociedades</p>
+                <p className="text-2xl font-bold">{sociedades.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-8 w-8 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">With Tax ID</p>
+                <p className="text-2xl font-bold">
+                  {sociedades.filter(s => s.tax_id && s.tax_id.trim()).length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Building2 className="h-8 w-8 text-orange-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">With Address</p>
+                <p className="text-2xl font-bold">
+                  {sociedades.filter(s => s.address && s.address.trim()).length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-8 w-8 text-purple-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
+                <p className="text-2xl font-bold">Active</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="mb-6">
@@ -254,51 +265,51 @@ export default function SociedadesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Legal Name</TableHead>
-                <TableHead>Country</TableHead>
+                <TableHead>Sociedad Name</TableHead>
                 <TableHead>Tax ID</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Address</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredSociedades.map((sociedad) => (
                 <TableRow key={sociedad.id}>
-                  <TableCell className="font-medium">{sociedad.sociedad_code}</TableCell>
-                  <TableCell>{sociedad.sociedad_name}</TableCell>
-                  <TableCell>{sociedad.legal_name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{sociedad.country}</Badge>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-violet-100 rounded-full flex items-center justify-center">
+                        <Building2 className="h-5 w-5 text-violet-600" />
+                      </div>
+                      <div>
+                        <div className="font-medium">{sociedad.sociedad_name}</div>
+                      </div>
+                    </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{sociedad.tax_id || 'N/A'}</TableCell>
                   <TableCell>
-                    <Badge variant={sociedad.is_active ? "default" : "secondary"}>
-                      {sociedad.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                    <span className="font-mono text-sm">{sociedad.tax_id || 'N/A'}</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-xs">
+                      <p className="text-sm text-muted-foreground truncate">
+                        {sociedad.address || 'No address provided'}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm text-muted-foreground">#{sociedad.id}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setEditingSociedad(sociedad)
-                        setFormData({
-                          sociedad_code: sociedad.sociedad_code,
-                          sociedad_name: sociedad.sociedad_name,
-                          legal_name: sociedad.legal_name,
-                          tax_id: sociedad.tax_id,
-                          country: sociedad.country,
-                          description: sociedad.description,
-                          is_active: sociedad.is_active
-                        })
-                        setDialogOpen(true)
-                      }}>
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(sociedad)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setSociedades(sociedades.filter(s => s.id !== sociedad.id))
-                        toast({ title: 'Success', description: 'Sociedad deleted successfully' })
-                      }}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDelete(sociedad.id)}
+                        disabled
+                        title="Delete functionality not yet implemented"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -307,6 +318,18 @@ export default function SociedadesPage() {
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Note */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Building2 className="h-4 w-4" />
+            <span>
+              Sociedad data is loaded from the database. Create/Update/Delete operations require API implementation.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>
