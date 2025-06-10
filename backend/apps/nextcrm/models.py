@@ -288,7 +288,13 @@ class Contract(models.Model):
     @property
     def total_value(self):
         """Calculate total contract value"""
-        return self.price * self.quantity
+        from decimal import Decimal
+        try:
+            price = Decimal(str(self.price)) if self.price else Decimal('0')
+            quantity = Decimal(str(self.quantity)) if self.quantity else Decimal('0')
+            return price * quantity
+        except (ValueError, TypeError):
+            return Decimal('0')
     
     def __str__(self):
         return f"{self.contract_number} - {self.counterparty.counterparty_name}"

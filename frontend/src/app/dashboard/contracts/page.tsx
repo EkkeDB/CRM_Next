@@ -23,6 +23,16 @@ const CONTRACT_STATUSES = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
+interface ReferenceData {
+  sociedades: any[]
+  commodityGroups: any[]
+  deliveryFormats: any[]
+  additives: any[]
+  brokers: any[]
+  icoterms: any[]
+  costCenters: any[]
+}
+
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [counterparties, setCounterparties] = useState<Counterparty[]>([])
@@ -30,6 +40,15 @@ export default function ContractsPage() {
   const [traders, setTraders] = useState<Trader[]>([])
   const [currencies, setCurrencies] = useState<Currency[]>([])
   const [tradeOperationTypes, setTradeOperationTypes] = useState<TradeOperationType[]>([])
+  const [referenceData, setReferenceData] = useState<ReferenceData>({
+    sociedades: [],
+    commodityGroups: [],
+    deliveryFormats: [],
+    additives: [],
+    brokers: [],
+    icoterms: [],
+    costCenters: []
+  })
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -48,6 +67,20 @@ export default function ContractsPage() {
     date: '',
     status: 'draft',
     trade_operation_type: '',
+    sociedad: '',
+    commodity_group: '',
+    delivery_format: '',
+    additive: '',
+    broker: '',
+    icoterm: '',
+    cost_center: '',
+    broker_fee: '',
+    freight_cost: '',
+    forex: '1.00',
+    payment_days: '30',
+    unit_of_measure: 'MT',
+    entrega: '',
+    delivery_period: '',
     notes: ''
   })
 
@@ -58,13 +91,34 @@ export default function ContractsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [contractsRes, counterpartiesRes, commoditiesRes, tradersRes, currenciesRes, tradeTypesRes] = await Promise.all([
+      const [
+        contractsRes, 
+        counterpartiesRes, 
+        commoditiesRes, 
+        tradersRes, 
+        currenciesRes, 
+        tradeTypesRes,
+        sociedadesRes,
+        commodityGroupsRes,
+        deliveryFormatsRes,
+        additivesRes,
+        brokersRes,
+        icotermsRes,
+        costCentersRes
+      ] = await Promise.all([
         contractsApi.getAll(),
         counterpartiesApi.getAll(),
         commoditiesApi.getAll(),
         referenceDataApi.getTraders(),
         referenceDataApi.getCurrencies(),
-        referenceDataApi.getTradeOperationTypes()
+        referenceDataApi.getTradeOperationTypes(),
+        referenceDataApi.getSociedades(),
+        referenceDataApi.getCommodityGroups(),
+        referenceDataApi.getDeliveryFormats(),
+        referenceDataApi.getAdditives(),
+        referenceDataApi.getBrokers(),
+        referenceDataApi.getIcoterms(),
+        referenceDataApi.getCostCenters()
       ])
 
       setContracts(contractsRes.results || contractsRes)
@@ -73,6 +127,15 @@ export default function ContractsPage() {
       setTraders(tradersRes)
       setCurrencies(currenciesRes)
       setTradeOperationTypes(tradeTypesRes)
+      setReferenceData({
+        sociedades: sociedadesRes,
+        commodityGroups: commodityGroupsRes,
+        deliveryFormats: deliveryFormatsRes,
+        additives: additivesRes,
+        brokers: brokersRes,
+        icoterms: icotermsRes,
+        costCenters: costCentersRes
+      })
     } catch (error) {
       console.error('Error fetching data:', error)
       toast({
@@ -93,26 +156,26 @@ export default function ContractsPage() {
         contract_number: formData.contract_number,
         trader: parseInt(formData.trader),
         trade_operation_type: parseInt(formData.trade_operation_type),
-        sociedad: 1, // Default value - you may need to adjust this
+        sociedad: parseInt(formData.sociedad),
         counterparty: parseInt(formData.counterparty),
         commodity: parseInt(formData.commodity),
-        commodity_group: 1, // Default value - you may need to adjust this
-        delivery_format: 1, // Default value - you may need to adjust this
-        additive: 1, // Default value - you may need to adjust this
-        broker: 1, // Default value - you may need to adjust this
-        icoterm: 1, // Default value - you may need to adjust this
-        cost_center: 1, // Default value - you may need to adjust this
-        broker_fee: '0.00',
+        commodity_group: parseInt(formData.commodity_group),
+        delivery_format: parseInt(formData.delivery_format),
+        additive: parseInt(formData.additive),
+        broker: parseInt(formData.broker),
+        icoterm: parseInt(formData.icoterm),
+        cost_center: parseInt(formData.cost_center),
+        broker_fee: formData.broker_fee || '0.00',
         broker_fee_currency: parseInt(formData.trade_currency),
-        freight_cost: '0.00',
-        forex: '1.00',
+        freight_cost: formData.freight_cost || '0.00',
+        forex: formData.forex || '1.00',
         price: formData.price,
         trade_currency: parseInt(formData.trade_currency),
-        payment_days: 30, // Default value
+        payment_days: parseInt(formData.payment_days) || 30,
         quantity: formData.quantity,
-        unit_of_measure: 'MT', // Default value
-        entrega: '',
-        delivery_period: '',
+        unit_of_measure: formData.unit_of_measure || 'MT',
+        entrega: formData.entrega || '',
+        delivery_period: formData.delivery_period || '',
         date: formData.date,
         notes: formData.notes
       }
@@ -157,6 +220,20 @@ export default function ContractsPage() {
       date: contract.date,
       status: contract.status,
       trade_operation_type: contract.trade_operation_type.toString(),
+      sociedad: contract.sociedad.toString(),
+      commodity_group: contract.commodity_group.toString(),
+      delivery_format: contract.delivery_format.toString(),
+      additive: contract.additive.toString(),
+      broker: contract.broker.toString(),
+      icoterm: contract.icoterm.toString(),
+      cost_center: contract.cost_center.toString(),
+      broker_fee: contract.broker_fee,
+      freight_cost: contract.freight_cost,
+      forex: contract.forex,
+      payment_days: contract.payment_days.toString(),
+      unit_of_measure: contract.unit_of_measure,
+      entrega: contract.entrega || '',
+      delivery_period: contract.delivery_period || '',
       notes: contract.notes || ''
     })
     setDialogOpen(true)
@@ -194,6 +271,20 @@ export default function ContractsPage() {
       date: '',
       status: 'draft',
       trade_operation_type: '',
+      sociedad: '',
+      commodity_group: '',
+      delivery_format: '',
+      additive: '',
+      broker: '',
+      icoterm: '',
+      cost_center: '',
+      broker_fee: '',
+      freight_cost: '',
+      forex: '1.00',
+      payment_days: '30',
+      unit_of_measure: 'MT',
+      entrega: '',
+      delivery_period: '',
       notes: ''
     })
   }
@@ -403,6 +494,173 @@ export default function ContractsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="sociedad">Sociedad *</Label>
+                  <Select value={formData.sociedad} onValueChange={(value) => setFormData({ ...formData, sociedad: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select sociedad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceData.sociedades.map(sociedad => (
+                        <SelectItem key={sociedad.id} value={sociedad.id.toString()}>{sociedad.sociedad_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="commodity_group">Commodity Group *</Label>
+                  <Select value={formData.commodity_group} onValueChange={(value) => setFormData({ ...formData, commodity_group: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceData.commodityGroups.map(group => (
+                        <SelectItem key={group.id} value={group.id.toString()}>{group.commodity_group_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="broker">Broker *</Label>
+                  <Select value={formData.broker} onValueChange={(value) => setFormData({ ...formData, broker: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select broker" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceData.brokers.map(broker => (
+                        <SelectItem key={broker.id} value={broker.id.toString()}>{broker.broker_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="delivery_format">Delivery Format *</Label>
+                  <Select value={formData.delivery_format} onValueChange={(value) => setFormData({ ...formData, delivery_format: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select delivery format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceData.deliveryFormats.map(format => (
+                        <SelectItem key={format.id} value={format.id.toString()}>{format.delivery_format_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="additive">Additive *</Label>
+                  <Select value={formData.additive} onValueChange={(value) => setFormData({ ...formData, additive: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select additive" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceData.additives.map(additive => (
+                        <SelectItem key={additive.id} value={additive.id.toString()}>{additive.additive_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="icoterm">ICOTERM *</Label>
+                  <Select value={formData.icoterm} onValueChange={(value) => setFormData({ ...formData, icoterm: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select ICOTERM" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceData.icoterms.map(icoterm => (
+                        <SelectItem key={icoterm.id} value={icoterm.id.toString()}>{icoterm.icoterm_code} - {icoterm.icoterm_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="cost_center">Cost Center *</Label>
+                  <Select value={formData.cost_center} onValueChange={(value) => setFormData({ ...formData, cost_center: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select cost center" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referenceData.costCenters.map(center => (
+                        <SelectItem key={center.id} value={center.id.toString()}>{center.cost_center_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-4">
+                <div>
+                  <Label htmlFor="broker_fee">Broker Fee</Label>
+                  <Input
+                    id="broker_fee"
+                    type="number"
+                    step="0.01"
+                    value={formData.broker_fee}
+                    onChange={(e) => setFormData({ ...formData, broker_fee: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="freight_cost">Freight Cost</Label>
+                  <Input
+                    id="freight_cost"
+                    type="number"
+                    step="0.01"
+                    value={formData.freight_cost}
+                    onChange={(e) => setFormData({ ...formData, freight_cost: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="forex">Forex Rate</Label>
+                  <Input
+                    id="forex"
+                    type="number"
+                    step="0.0001"
+                    value={formData.forex}
+                    onChange={(e) => setFormData({ ...formData, forex: e.target.value })}
+                    placeholder="1.0000"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="payment_days">Payment Days</Label>
+                  <Input
+                    id="payment_days"
+                    type="number"
+                    value={formData.payment_days}
+                    onChange={(e) => setFormData({ ...formData, payment_days: e.target.value })}
+                    placeholder="30"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="entrega">Delivery Point</Label>
+                  <Input
+                    id="entrega"
+                    value={formData.entrega}
+                    onChange={(e) => setFormData({ ...formData, entrega: e.target.value })}
+                    placeholder="e.g., Port of Hamburg"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="delivery_period">Delivery Period</Label>
+                  <Input
+                    id="delivery_period"
+                    type="date"
+                    value={formData.delivery_period}
+                    onChange={(e) => setFormData({ ...formData, delivery_period: e.target.value })}
+                  />
                 </div>
               </div>
 
