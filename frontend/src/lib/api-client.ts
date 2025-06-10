@@ -324,6 +324,40 @@ export const referenceDataApi = {
   },
 }
 
+// Traders API (currently limited - needs backend implementation for full CRUD)
+export const tradersApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<Trader[]> => {
+    // Use the reference data endpoint for now
+    return referenceDataApi.getTraders()
+  },
+
+  getById: async (id: number): Promise<Trader> => {
+    const traders = await referenceDataApi.getTraders()
+    const trader = traders.find(t => t.id === id)
+    if (!trader) throw new Error('Trader not found')
+    return trader
+  },
+
+  create: async (data: Omit<Trader, 'id'>): Promise<Trader> => {
+    // This endpoint needs to be implemented in the backend
+    throw new Error('Create trader endpoint not implemented in backend. Please contact administrator.')
+  },
+
+  update: async (id: number, data: Partial<Trader>): Promise<Trader> => {
+    // This endpoint needs to be implemented in the backend  
+    throw new Error('Update trader endpoint not implemented in backend. Please contact administrator.')
+  },
+
+  delete: async (id: number): Promise<void> => {
+    // This endpoint needs to be implemented in the backend
+    throw new Error('Delete trader endpoint not implemented in backend. Please contact administrator.')
+  }
+}
+
 // Export the main API client
 export default apiClient
 

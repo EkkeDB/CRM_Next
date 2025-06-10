@@ -9,6 +9,8 @@ WORKDIR /app
 
 # Set environment variables
 ENV NODE_ENV=development
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
 # Copy package files
 COPY package.json ./
@@ -22,5 +24,5 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Start development server
+# Start development server with host binding
 CMD ["npm", "run", "dev"]

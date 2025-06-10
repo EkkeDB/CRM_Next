@@ -9,39 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Plus, Search, Edit, Eye, Trash2, Users, Mail, Phone, Activity, TrendingUp } from 'lucide-react'
-import { referenceDataApi, contractsApi } from '@/lib/api-client'
+import { tradersApi, contractsApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { Trader, Contract } from '@/types'
-
-// Trader API client - we'll add this to the main api-client.ts later
-const tradersApi = {
-  getAll: async (): Promise<Trader[]> => {
-    return referenceDataApi.getTraders()
-  },
-  
-  getById: async (id: number): Promise<Trader> => {
-    // This would need to be implemented in the backend
-    const traders = await referenceDataApi.getTraders()
-    const trader = traders.find(t => t.id === id)
-    if (!trader) throw new Error('Trader not found')
-    return trader
-  },
-  
-  create: async (data: Omit<Trader, 'id'>): Promise<Trader> => {
-    // This would need to be implemented in the backend
-    throw new Error('Create trader endpoint not implemented')
-  },
-  
-  update: async (id: number, data: Partial<Trader>): Promise<Trader> => {
-    // This would need to be implemented in the backend
-    throw new Error('Update trader endpoint not implemented')
-  },
-  
-  delete: async (id: number): Promise<void> => {
-    // This would need to be implemented in the backend
-    throw new Error('Delete trader endpoint not implemented')
-  }
-}
 
 export default function TradersPage() {
   const [traders, setTraders] = useState<Trader[]>([])
@@ -106,9 +76,10 @@ export default function TradersPage() {
       fetchData()
     } catch (error) {
       console.error('Error saving trader:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save trader'
       toast({
         title: 'Error',
-        description: 'This feature is not yet implemented in the backend',
+        description: errorMessage,
         variant: 'destructive'
       })
     }
@@ -136,9 +107,10 @@ export default function TradersPage() {
       fetchData()
     } catch (error) {
       console.error('Error deleting trader:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete trader'
       toast({
         title: 'Error',
-        description: 'This feature is not yet implemented in the backend',
+        description: errorMessage,
         variant: 'destructive'
       })
     }

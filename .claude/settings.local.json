@@ -25,7 +25,12 @@
       "Bash(sudo rm:*)",
       "Bash(true)",
       "Bash(sudo chown:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(PORT=3000 npm run dev)",
+      "Bash(fuser:*)",
+      "Bash(sudo ss:*)",
+      "Bash(timeout:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": []
   }
