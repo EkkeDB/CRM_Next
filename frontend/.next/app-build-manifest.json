@@ -11,40 +11,80 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/layout.js"
     ],
-    "/dashboard/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
-    ],
     "/dashboard/contracts/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/contracts/page.js"
     ],
-    "/dashboard/counterparties/page": [
+    "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/counterparties/page.js"
+      "static/chunks/app/dashboard/page.js"
     ],
-    "/dashboard/traders/page": [
+    "/dashboard/currencies/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/traders/page.js"
+      "static/chunks/app/dashboard/currencies/page.js"
     ],
-    "/dashboard/contacts/page": [
+    "/dashboard/cost-centers/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/contacts/page.js"
+      "static/chunks/app/dashboard/cost-centers/page.js"
+    ],
+    "/dashboard/sociedades/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/sociedades/page.js"
+    ],
+    "/dashboard/trade-operation-types/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/trade-operation-types/page.js"
+    ],
+    "/dashboard/commodity-groups/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/commodity-groups/page.js"
+    ],
+    "/dashboard/commodity-types/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/commodity-types/page.js"
+    ],
+    "/dashboard/commodity-subtypes/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/commodity-subtypes/page.js"
+    ],
+    "/dashboard/commodities/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/commodities/page.js"
+    ],
+    "/dashboard/icoterms/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/icoterms/page.js"
+    ],
+    "/dashboard/delivery-formats/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/delivery-formats/page.js"
+    ],
+    "/dashboard/additives/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/additives/page.js"
     ],
     "/dashboard/reports/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/reports/page.js"
     ],
-    "/dashboard/settings/page": [
+    "/dashboard/counterparties/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/settings/page.js"
+      "static/chunks/app/dashboard/counterparties/page.js"
     ]
   }
 }

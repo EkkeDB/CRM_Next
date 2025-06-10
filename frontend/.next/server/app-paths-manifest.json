@@ -1,9 +1,9 @@
 {
-  "/dashboard/contacts/page": "app/dashboard/contacts/page.js",
-  "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
-  "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/commodities/page": "app/dashboard/commodities/page.js",
+  "/dashboard/icoterms/page": "app/dashboard/icoterms/page.js",
+  "/dashboard/commodity-subtypes/page": "app/dashboard/commodity-subtypes/page.js",
+  "/dashboard/delivery-formats/page": "app/dashboard/delivery-formats/page.js",
+  "/dashboard/additives/page": "app/dashboard/additives/page.js",
   "/dashboard/reports/page": "app/dashboard/reports/page.js",
-  "/dashboard/traders/page": "app/dashboard/traders/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js"
+  "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js"
 }
