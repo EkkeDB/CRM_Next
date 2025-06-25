@@ -1,7 +1,3 @@
 {
-  "/dashboard/commodity-groups/page": "app/dashboard/commodity-groups/page.js",
-  "/dashboard/commodity-types/page": "app/dashboard/commodity-types/page.js",
-  "/dashboard/commodity-subtypes/page": "app/dashboard/commodity-subtypes/page.js",
-  "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
-  "/dashboard/commodities/page": "app/dashboard/commodities/page.js"
+  "/page": "app/page.js"
 }
