@@ -1,0 +1,36 @@
+OAuth 401 Authentication Error Analysis
+=======================================
+
+Error Message:
+API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth authentication is currently not allowed for this organization."}}
+
+Root Cause:
+-----------
+The error indicates that OAuth authentication has been disabled or restricted at the organization level. This is likely occurring because:
+
+1. **Organization-Level Restriction**: The organization's Anthropic account has OAuth authentication disabled in their settings.
+
+2. **Security Policy**: The organization may have implemented a security policy that restricts OAuth authentication as a security measure.
+
+3. **Account Type Limitation**: The current account type (possibly a trial or restricted account) may not support OAuth authentication features.
+
+4. **API Configuration**: The API endpoint being used may not be configured to handle OAuth authentication for this specific organization.
+
+Solutions:
+----------
+1. **Contact Administrator**: Reach out to the organization's administrator to enable OAuth authentication in the account settings.
+
+2. **Use Alternative Authentication**: Switch to using standard username/password authentication or API keys if OAuth is not available.
+
+3. **Check Account Permissions**: Verify that the current account has the necessary permissions to use OAuth authentication.
+
+4. **Contact Support**: If the issue persists, contact Anthropic support to clarify the authentication restrictions for the organization.
+
+Technical Details:
+------------------
+- HTTP Status Code: 401 (Unauthorized)
+- Error Type: authentication_error
+- Authentication Method: OAuth
+- Restriction Level: Organization-wide
+
+This error is a policy/configuration issue rather than a technical bug, requiring administrative action to resolve.

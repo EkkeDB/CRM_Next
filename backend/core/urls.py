@@ -5,15 +5,27 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
 
+def ping_view(request):
+    """Simple ping endpoint for connectivity testing"""
+    return JsonResponse({
+        'status': 'ok',
+        'message': 'NextCRM Backend is running',
+        'version': '1.0.0'
+    })
+
 urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
+    
+    # Ping endpoint for connectivity testing
+    path('ping/', ping_view, name='ping'),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

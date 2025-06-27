@@ -14,7 +14,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django_ratelimit.decorators import ratelimit
 
 from .models import UserProfile, SecurityLog, AuditLog
@@ -292,7 +292,27 @@ def me(request):
 @permission_classes([AllowAny])
 def health_check(request):
     """Health check endpoint"""
-    return Response({'status': 'healthy'})
+    return Response({
+        'status': 'healthy',
+        'timestamp': timezone.now().isoformat(),
+        'cors_origin': request.META.get('HTTP_ORIGIN', 'no-origin'),
+        'user_agent': request.META.get('HTTP_USER_AGENT', 'no-user-agent')[:100]
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def ping(request):
+    """Simple ping endpoint for network testing"""
+    return Response({
+        'message': 'pong',
+        'timestamp': timezone.now().isoformat(),
+        'server': 'Django Backend',
+        'origin': request.META.get('HTTP_ORIGIN', 'unknown'),
+        'host': request.META.get('HTTP_HOST', 'unknown'),
+        'remote_addr': request.META.get('REMOTE_ADDR', 'unknown'),
+        'user_agent': request.META.get('HTTP_USER_AGENT', 'unknown')[:100]
+    })
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -340,7 +360,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-@ensure_csrf_cookie
+@csrf_exempt
 def csrf_token(request):
     """Get CSRF token for frontend"""
-    return JsonResponse({'csrfToken': get_token(request)})
+    # Set CSRF cookie and return token
+    token = get_token(request)
+    return JsonResponse({'csrfToken': token})

@@ -17,7 +17,18 @@ import type {
 } from '@/types'
 
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Smart environment detection for Docker/browser compatibility
+const getAPIBaseURL = () => {
+  // Client-side (browser) - use external URL
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+  }
+  
+  // Server-side (SSR/container) - use internal URL
+  return process.env.NEXT_PUBLIC_API_URL_INTERNAL || process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000'
+}
+
+const API_BASE_URL = getAPIBaseURL()
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -29,15 +40,53 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// Function to get CSRF token
+// Cache for CSRF token to avoid repeated requests
+let csrfTokenCache: string | null = null
+let csrfTokenPromise: Promise<string> | null = null
+
+// Function to get CSRF token with caching
 const getCSRFToken = async (): Promise<string> => {
-  try {
-    const response = await apiClient.get('/auth/csrf/')
-    return response.data.csrfToken
-  } catch (error) {
-    console.error('Failed to get CSRF token:', error)
-    return ''
+  // Return cached token if available
+  if (csrfTokenCache) {
+    return csrfTokenCache
   }
+
+  // Return ongoing promise if one exists
+  if (csrfTokenPromise) {
+    return csrfTokenPromise
+  }
+
+  // Create new promise to fetch CSRF token
+  csrfTokenPromise = (async () => {
+    try {
+      // Create a simple axios instance without interceptors for CSRF request
+      const simpleClient = axios.create({
+        baseURL: `${API_BASE_URL}/api`,
+        timeout: 10000,
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      
+      const response = await simpleClient.get('/auth/csrf/')
+      csrfTokenCache = response.data.csrfToken
+      return response.data.csrfToken
+    } catch (error) {
+      console.error('Failed to get CSRF token:', error)
+      return ''
+    } finally {
+      csrfTokenPromise = null
+    }
+  })()
+
+  return csrfTokenPromise
+}
+
+// Function to clear CSRF token cache (call when getting 403 errors)
+const clearCSRFTokenCache = () => {
+  csrfTokenCache = null
+  csrfTokenPromise = null
 }
 
 // Request interceptor
@@ -75,6 +124,17 @@ apiClient.interceptors.response.use(
         // Refresh failed, redirect to login
         if (typeof window !== 'undefined') {
           window.location.href = '/auth/login'
+        }
+      }
+    } else if (error.response?.status === 403) {
+      // CSRF token might be invalid, clear cache and retry once
+      const errorMessage = error.response?.data?.detail || ''
+      if (errorMessage.includes('CSRF') || errorMessage.includes('Forbidden')) {
+        clearCSRFTokenCache()
+        // Only retry if this isn't already a retry
+        if (error.config && !error.config.headers['X-Retry-CSRF']) {
+          error.config.headers['X-Retry-CSRF'] = 'true'
+          return apiClient(error.config)
         }
       }
     }
@@ -324,37 +384,34 @@ export const referenceDataApi = {
   },
 }
 
-// Traders API (currently limited - needs backend implementation for full CRUD)
+// Traders API - Full CRUD operations
 export const tradersApi = {
   getAll: async (params?: {
     page?: number
     page_size?: number
     search?: string
-  }): Promise<Trader[]> => {
-    // Use the reference data endpoint for now
-    return referenceDataApi.getTraders()
+  }): Promise<PaginatedResponse<Trader>> => {
+    const response = await apiClient.get('/crm/traders/', { params })
+    return response.data
   },
 
   getById: async (id: number): Promise<Trader> => {
-    const traders = await referenceDataApi.getTraders()
-    const trader = traders.find(t => t.id === id)
-    if (!trader) throw new Error('Trader not found')
-    return trader
+    const response = await apiClient.get(`/crm/traders/${id}/`)
+    return response.data
   },
 
   create: async (data: Omit<Trader, 'id'>): Promise<Trader> => {
-    // This endpoint needs to be implemented in the backend
-    throw new Error('Create trader endpoint not implemented in backend. Please contact administrator.')
+    const response = await apiClient.post('/crm/traders/', data)
+    return response.data
   },
 
   update: async (id: number, data: Partial<Trader>): Promise<Trader> => {
-    // This endpoint needs to be implemented in the backend  
-    throw new Error('Update trader endpoint not implemented in backend. Please contact administrator.')
+    const response = await apiClient.put(`/crm/traders/${id}/`, data)
+    return response.data
   },
 
   delete: async (id: number): Promise<void> => {
-    // This endpoint needs to be implemented in the backend
-    throw new Error('Delete trader endpoint not implemented in backend. Please contact administrator.')
+    await apiClient.delete(`/crm/traders/${id}/`)
   }
 }
 
