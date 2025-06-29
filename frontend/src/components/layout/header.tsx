@@ -17,11 +17,44 @@ import { Bell, Search, User, LogOut, Settings } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
 
 export function Header() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading } = useAuth()
   const logout = useLogout()
 
   const handleLogout = () => {
     logout.mutate()
+  }
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <header className="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-6 shadow-sm">
+        <div className="flex flex-1 items-center space-x-4">
+          <div className="text-sm text-slate-500">Loading...</div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <div className="h-10 w-10 rounded-xl bg-slate-200 dark:bg-slate-700 animate-pulse"></div>
+        </div>
+      </header>
+    )
+  }
+
+  // Show unauthenticated state
+  if (!isAuthenticated || !user) {
+    return (
+      <header className="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-6 shadow-sm">
+        <div className="flex flex-1 items-center space-x-4">
+          <div className="text-sm text-slate-500">Please log in to continue</div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <Button 
+            onClick={() => window.location.href = '/auth/login'}
+            className="h-10 px-4 rounded-xl"
+          >
+            Sign In
+          </Button>
+        </div>
+      </header>
+    )
   }
 
   return (

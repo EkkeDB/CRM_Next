@@ -129,9 +129,9 @@ export default function CommoditiesPage() {
     setFormData({
       commodity_name_short: commodity.commodity_name_short,
       commodity_name_full: commodity.commodity_name_full || '',
-      commodity_group: commodity.commodity_group?.toString() || '',
-      commodity_type: commodity.commodity_type?.toString() || '',
-      commodity_subtype: commodity.commodity_subtype?.toString() || '',
+      commodity_group: commodity.commodity_group_name || '',
+      commodity_type: commodity.commodity_type_name || '',
+      commodity_subtype: commodity.commodity_subtype_name || '',
       unit_of_measure: commodity.unit_of_measure || 'MT',
     })
     setDialogOpen(true)

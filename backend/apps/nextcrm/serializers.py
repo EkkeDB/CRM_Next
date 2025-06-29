@@ -75,6 +75,58 @@ class CounterpartySerializer(serializers.ModelSerializer):
     class Meta:
         model = Counterparty
         fields = '__all__'
+        
+    def validate_counterparty_name(self, value):
+        """Validate counterparty name"""
+        if not value.strip():
+            raise serializers.ValidationError("Company name cannot be empty")
+        
+        # Check for duplicate names during creation
+        if not self.instance:
+            if Counterparty.objects.filter(counterparty_name__iexact=value.strip()).exists():
+                raise serializers.ValidationError("A counterparty with this name already exists")
+        # Check for duplicate names during update (exclude current instance)
+        elif self.instance and Counterparty.objects.filter(
+            counterparty_name__iexact=value.strip()
+        ).exclude(id=self.instance.id).exists():
+            raise serializers.ValidationError("A counterparty with this name already exists")
+            
+        return value.strip()
+    
+    def validate_counterparty_code(self, value):
+        """Validate counterparty code"""
+        if value:
+            value = value.strip().upper()
+            # Check for duplicate codes during creation
+            if not self.instance:
+                if Counterparty.objects.filter(counterparty_code__iexact=value).exists():
+                    raise serializers.ValidationError("A counterparty with this code already exists")
+            # Check for duplicate codes during update (exclude current instance)
+            elif self.instance and Counterparty.objects.filter(
+                counterparty_code__iexact=value
+            ).exclude(id=self.instance.id).exists():
+                raise serializers.ValidationError("A counterparty with this code already exists")
+        
+        return value
+    
+    def validate_email(self, value):
+        """Validate email format"""
+        if value:
+            import re
+            email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+            if not re.match(email_pattern, value):
+                raise serializers.ValidationError("Please enter a valid email address")
+        return value
+    
+    def validate(self, data):
+        """Cross-field validation"""
+        # Ensure at least one type is selected
+        if not data.get('is_customer') and not data.get('is_supplier'):
+            raise serializers.ValidationError({
+                'is_customer': 'Counterparty must be either a customer, supplier, or both'
+            })
+        
+        return data
 
 
 class CounterpartyListSerializer(serializers.ModelSerializer):

@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Eye, Trash2, Building, Users, MapPin, Mail, Phone } from 'lucide-react'
 import { counterpartiesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import type { Counterparty } from '@/types'
 
 const COUNTERPARTY_TYPES = [
@@ -24,10 +25,14 @@ const COUNTERPARTY_TYPES = [
 export default function CounterpartiesPage() {
   const [counterparties, setCounterparties] = useState<Counterparty[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCounterparty, setEditingCounterparty] = useState<Counterparty | null>(null)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [counterpartyToDelete, setCounterpartyToDelete] = useState<{ id: number; name: string } | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
@@ -46,6 +51,25 @@ export default function CounterpartiesPage() {
   useEffect(() => {
     fetchData()
   }, [])
+
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.counterparty_name.trim()) {
+      errors.counterparty_name = 'Company name is required'
+    }
+
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address'
+    }
+
+    if (!formData.is_customer && !formData.is_supplier) {
+      errors.type = 'Please select at least one type (Customer or Supplier)'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
 
   const fetchData = async () => {
     try {
@@ -66,7 +90,15 @@ export default function CounterpartiesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
     try {
+      setSubmitting(true)
+      setFormErrors({})
+
       if (editingCounterparty) {
         await counterpartiesApi.update(editingCounterparty.id, formData)
         toast({
@@ -84,13 +116,29 @@ export default function CounterpartiesPage() {
       setEditingCounterparty(null)
       resetForm()
       fetchData()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving counterparty:', error)
+      
+      // Handle specific validation errors from the backend
+      if (error.response?.status === 400 && error.response?.data) {
+        const backendErrors: Record<string, string> = {}
+        Object.keys(error.response.data).forEach(key => {
+          if (Array.isArray(error.response.data[key])) {
+            backendErrors[key] = error.response.data[key][0]
+          } else {
+            backendErrors[key] = error.response.data[key]
+          }
+        })
+        setFormErrors(backendErrors)
+      }
+      
       toast({
         title: 'Error',
-        description: 'Failed to save counterparty',
+        description: error.response?.data?.detail || 'Failed to save counterparty',
         variant: 'destructive'
       })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -111,23 +159,32 @@ export default function CounterpartiesPage() {
     setDialogOpen(true)
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this counterparty?')) return
+  const handleDeleteClick = (id: number, name: string) => {
+    setCounterpartyToDelete({ id, name })
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!counterpartyToDelete) return
     
     try {
-      await counterpartiesApi.delete(id)
+      setLoading(true)
+      await counterpartiesApi.delete(counterpartyToDelete.id)
       toast({
         title: 'Success',
-        description: 'Counterparty deleted successfully'
+        description: `Counterparty "${counterpartyToDelete.name}" deleted successfully`
       })
       fetchData()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting counterparty:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete counterparty',
+        description: error.response?.data?.detail || 'Failed to delete counterparty',
         variant: 'destructive'
       })
+    } finally {
+      setLoading(false)
+      setCounterpartyToDelete(null)
     }
   }
 
@@ -144,6 +201,7 @@ export default function CounterpartiesPage() {
       is_supplier: false,
       is_customer: true,
     })
+    setFormErrors({})
   }
 
   const handleTypeChange = (value: string) => {
@@ -236,7 +294,11 @@ export default function CounterpartiesPage() {
                     onChange={(e) => setFormData({ ...formData, counterparty_name: e.target.value })}
                     required
                     placeholder="Enter company name"
+                    className={formErrors.counterparty_name ? 'border-red-500' : ''}
                   />
+                  {formErrors.counterparty_name && (
+                    <p className="text-sm text-red-500 mt-1">{formErrors.counterparty_name}</p>
+                  )}
                 </div>
                 
                 <div>
@@ -246,7 +308,11 @@ export default function CounterpartiesPage() {
                     value={formData.counterparty_code}
                     onChange={(e) => setFormData({ ...formData, counterparty_code: e.target.value })}
                     placeholder="e.g., CP001"
+                    className={formErrors.counterparty_code ? 'border-red-500' : ''}
                   />
+                  {formErrors.counterparty_code && (
+                    <p className="text-sm text-red-500 mt-1">{formErrors.counterparty_code}</p>
+                  )}
                 </div>
                 
                 <div>
@@ -270,7 +336,7 @@ export default function CounterpartiesPage() {
                   } 
                   onValueChange={handleTypeChange}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={formErrors.type ? 'border-red-500' : ''}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -279,6 +345,9 @@ export default function CounterpartiesPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {formErrors.type && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.type}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -300,7 +369,11 @@ export default function CounterpartiesPage() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="contact@company.com"
+                    className={formErrors.email ? 'border-red-500' : ''}
                   />
+                  {formErrors.email && (
+                    <p className="text-sm text-red-500 mt-1">{formErrors.email}</p>
+                  )}
                 </div>
               </div>
 
@@ -337,11 +410,18 @@ export default function CounterpartiesPage() {
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  {editingCounterparty ? 'Update Counterparty' : 'Create Counterparty'}
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={submitting}>
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      {editingCounterparty ? 'Updating...' : 'Creating...'}
+                    </div>
+                  ) : (
+                    editingCounterparty ? 'Update Counterparty' : 'Create Counterparty'
+                  )}
                 </Button>
               </div>
             </form>
@@ -471,10 +551,10 @@ export default function CounterpartiesPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => handleEdit(counterparty)}>
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(counterparty)} disabled={loading}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(counterparty.id)}>
+                      <Button variant="outline" size="sm" onClick={() => handleDeleteClick(counterparty.id, counterparty.counterparty_name)} disabled={loading}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -492,6 +572,23 @@ export default function CounterpartiesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Counterparty"
+        description={
+          counterpartyToDelete
+            ? `Are you sure you want to delete "${counterpartyToDelete.name}"? This action cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setCounterpartyToDelete(null)}
+      />
     </div>
   )
 }

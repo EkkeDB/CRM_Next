@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { redirect } from 'next/navigation'
-import Sidebar from '@/components/layout/Sidebar'
+import Sidebar from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 
 export default function DashboardLayout({
@@ -11,25 +11,24 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  // const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
 
   const toggleSidebar = () => setCollapsed(prev => !prev)
 
-  // Temporarily bypass authentication for testing
-  // // Show loading spinner while checking authentication
-  // if (isLoading) {
-  //   return (
-  //     <div className="flex h-screen items-center justify-center">
-  //       <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-  //     </div>
-  //   )
-  // }
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
-  // // Redirect to login if not authenticated
-  // if (!isAuthenticated) {
-  //   redirect('/auth/login')
-  // }
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    redirect('/auth/login')
+  }
 
   return (
     <div className="flex h-screen bg-background">

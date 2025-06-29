@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { authApi } from '@/lib/api-client'
+import { authApi, hasAuthTokens } from '@/lib/api-client'
 import type { User, LoginCredentials, RegisterData, ChangePasswordData } from '@/types'
 
 // Query keys
@@ -14,6 +14,7 @@ export function useProfile() {
     queryKey: authKeys.profile(),
     queryFn: authApi.getProfile,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: hasAuthTokens(), // Only make API call if we have auth tokens
     retry: (failureCount, error: any) => {
       // Don't retry on 401 (unauthorized)
       if (error?.response?.status === 401) {
@@ -85,12 +86,24 @@ export function useChangePassword() {
 
 // Authentication status hook
 export function useAuth() {
+  const hasTokens = hasAuthTokens()
   const {
     data: user,
     isLoading,
     isError,
     error,
   } = useProfile()
+
+  // If no tokens exist, we're definitely not authenticated
+  if (!hasTokens) {
+    return {
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      isError: false,
+      error: null,
+    }
+  }
 
   const isAuthenticated = !!user && !isError
 

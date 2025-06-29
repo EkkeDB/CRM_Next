@@ -1,12 +1,13 @@
 # NextCRM Project Status Report
-Generated: December 9, 2025
+Generated: June 29, 2025
 
 ## Overview
 NextCRM is a comprehensive commodity trading CRM system built with Django 5.2.1 backend and Next.js 15.1 frontend. This is a modern, full-stack application designed for managing commodity trading operations.
 
 ## Current Version
 - **Version**: 1.0.0 (based on package.json and README)
-- **Last Git Commit**: CRM_Next 0.21
+- **Last Git Commit**: CRM_Next 0.41
+- **Current Branch**: restore-774241e
 - **Architecture**: Microservices with Docker containerization
 
 ## Technology Stack

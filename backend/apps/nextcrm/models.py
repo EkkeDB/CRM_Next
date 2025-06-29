@@ -139,7 +139,7 @@ class Commodity(models.Model):
 
 class Counterparty(models.Model):
     counterparty_name = models.CharField(max_length=100)
-    counterparty_code = models.CharField(max_length=20, unique=True, blank=True)
+    counterparty_code = models.CharField(max_length=20, unique=True, blank=True, null=True)
     tax_id = models.CharField(max_length=30, blank=True)
     city = models.CharField(max_length=50, blank=True)
     country = models.CharField(max_length=50, blank=True)
@@ -156,6 +156,52 @@ class Counterparty(models.Model):
     class Meta:
         db_table = 'counterparties'
         verbose_name_plural = 'Counterparties'
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(is_customer=True) | models.Q(is_supplier=True),
+                name='counterparty_must_be_customer_or_supplier'
+            ),
+        ]
+
+    def clean(self):
+        """Model validation"""
+        from django.core.exceptions import ValidationError
+        errors = {}
+        
+        # Validate that counterparty name is not empty
+        if not self.counterparty_name or not self.counterparty_name.strip():
+            errors['counterparty_name'] = 'Company name cannot be empty'
+        
+        # Validate that at least one type is selected
+        if not self.is_customer and not self.is_supplier:
+            errors['__all__'] = 'Counterparty must be either a customer, supplier, or both'
+        
+        # Validate email format if provided
+        if self.email:
+            import re
+            email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+            if not re.match(email_pattern, self.email):
+                errors['email'] = 'Please enter a valid email address'
+        
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        """Override save to perform validation and cleanup"""
+        # Clean up fields
+        if self.counterparty_name:
+            self.counterparty_name = self.counterparty_name.strip()
+        
+        if self.counterparty_code:
+            self.counterparty_code = self.counterparty_code.strip().upper()
+        
+        # Handle empty string as null for unique field
+        if self.counterparty_code == '':
+            self.counterparty_code = None
+        
+        # Call clean method for validation
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.counterparty_name

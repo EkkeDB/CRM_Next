@@ -23,7 +23,11 @@
       "Bash(docker restart:*)",
       "Bash(npm run lint)",
       "Bash(npm run type-check:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(timeout:*)",
+      "Bash(node:*)",
+      "Bash(python:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

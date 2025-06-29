@@ -30,53 +30,119 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// CSRF token cache to prevent infinite recursion
-let csrfTokenCache: string | null = null
-let csrfTokenPromise: Promise<string> | null = null
+// CSRF token management with enhanced error handling and race condition prevention
+interface CSRFTokenState {
+  token: string | null
+  promise: Promise<string> | null
+  lastFetch: number
+  failureCount: number
+  circuitBreakerOpen: boolean
+}
 
-// Function to get CSRF token with caching and recursion prevention
+const csrfState: CSRFTokenState = {
+  token: null,
+  promise: null,
+  lastFetch: 0,
+  failureCount: 0,
+  circuitBreakerOpen: false
+}
+
+// Circuit breaker configuration
+const CIRCUIT_BREAKER_THRESHOLD = 3
+const CIRCUIT_BREAKER_TIMEOUT = 30000 // 30 seconds
+const TOKEN_CACHE_DURATION = 300000 // 5 minutes
+const REQUEST_TIMEOUT = 10000 // 10 seconds
+
+// Function to get CSRF token with robust error handling and circuit breaker
 const getCSRFToken = async (): Promise<string> => {
-  // Return cached token if available
-  if (csrfTokenCache) {
-    return Promise.resolve(csrfTokenCache)
+  const now = Date.now()
+  
+  // Check circuit breaker
+  if (csrfState.circuitBreakerOpen) {
+    if (now - csrfState.lastFetch < CIRCUIT_BREAKER_TIMEOUT) {
+      console.warn('CSRF circuit breaker is open, skipping token fetch')
+      return csrfState.token || ''
+    } else {
+      // Reset circuit breaker
+      csrfState.circuitBreakerOpen = false
+      csrfState.failureCount = 0
+    }
+  }
+  
+  // Return cached token if still valid
+  if (csrfState.token && (now - csrfState.lastFetch) < TOKEN_CACHE_DURATION) {
+    return csrfState.token
   }
   
   // Return existing promise if request is in progress
-  if (csrfTokenPromise) {
-    return csrfTokenPromise
+  if (csrfState.promise) {
+    return csrfState.promise
   }
   
-  // Create new request with special config to bypass interceptor
-  // Use a fresh axios instance to avoid any authentication interference
+  // Create new request with special config to bypass interceptors and prevent loops
   const csrfAxios = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 10000,
-    withCredentials: true, // Keep true for CSRF cookies
+    timeout: REQUEST_TIMEOUT,
+    withCredentials: true, // Required for CSRF cookies
     headers: {
       'Content-Type': 'application/json',
     }
   })
   
-  csrfTokenPromise = csrfAxios.get('/api/auth/csrf/').then(response => {
-    csrfTokenCache = response.data.csrfToken
-    csrfTokenPromise = null
-    return csrfTokenCache || ''
-  }).catch(error => {
-    console.error('Failed to get CSRF token:', error)
-    console.error('Error details:', error.response?.data || error.message)
-    csrfTokenPromise = null
-    // Clear any bad authentication state that might be causing issues
-    clearAuthState()
-    return ''
-  })
+  csrfState.promise = csrfAxios.get('/api/auth/csrf/')
+    .then(response => {
+      // Successful response
+      const token = response.data?.csrfToken || ''
+      csrfState.token = token
+      csrfState.lastFetch = now
+      csrfState.failureCount = 0
+      csrfState.circuitBreakerOpen = false
+      csrfState.promise = null
+      
+      console.debug('CSRF token fetched successfully')
+      return token
+    })
+    .catch(error => {
+      // Failed response
+      csrfState.promise = null
+      csrfState.failureCount++
+      
+      console.error('Failed to get CSRF token:', error.response?.status, error.message)
+      
+      // Open circuit breaker if too many failures
+      if (csrfState.failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
+        csrfState.circuitBreakerOpen = true
+        console.warn('CSRF circuit breaker opened due to repeated failures')
+      }
+      
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        // 401 might indicate session issues, but don't clear auth state immediately
+        // Let the response interceptor handle authentication errors
+        console.warn('CSRF endpoint returned 401, session may be expired')
+      } else if (error.response?.status === 403) {
+        // 403 might indicate CORS or permission issues
+        console.warn('CSRF endpoint returned 403, possible CORS or permission issue')
+      } else if (error.code === 'ECONNABORTED') {
+        console.warn('CSRF request timed out')
+      } else if (!error.response) {
+        console.warn('CSRF request failed with network error')
+      }
+      
+      // Return cached token if available, empty string otherwise
+      return csrfState.token || ''
+    })
   
-  return csrfTokenPromise
+  return csrfState.promise
 }
 
 // Function to clear CSRF token cache (e.g., on 403 errors)
 const clearCSRFTokenCache = (): void => {
-  csrfTokenCache = null
-  csrfTokenPromise = null
+  csrfState.token = null
+  csrfState.promise = null
+  csrfState.lastFetch = 0
+  csrfState.failureCount = 0
+  csrfState.circuitBreakerOpen = false
 }
 
 // Function to clear all authentication state
@@ -88,52 +154,121 @@ const clearAuthState = (): void => {
   }
 }
 
-// Request interceptor
+// Request interceptor with enhanced error handling
 apiClient.interceptors.request.use(
   async (config) => {
-    // Add CSRF token for non-GET requests
-    if (config.method !== 'get') {
-      const csrfToken = await getCSRFToken()
-      if (csrfToken) {
-        config.headers['X-CSRFToken'] = csrfToken
+    // Add CSRF token for non-GET requests, but not for auth endpoints to prevent loops
+    const isAuthEndpoint = config.url?.includes('/auth/')
+    
+    if (config.method !== 'get' && !isAuthEndpoint) {
+      try {
+        const csrfToken = await getCSRFToken()
+        if (csrfToken) {
+          config.headers['X-CSRFToken'] = csrfToken
+        } else {
+          console.warn('No CSRF token available for request:', config.url)
+        }
+      } catch (error) {
+        console.error('Failed to get CSRF token for request:', config.url, error)
+        // Continue with request without CSRF token rather than failing
+        // The server will return 403 if CSRF is required, and we'll handle it in response interceptor
       }
     }
+    
     return config
   },
   (error) => {
+    console.error('Request interceptor error:', error)
     return Promise.reject(error)
   }
 )
 
-// Response interceptor
+// Track retry attempts to prevent infinite loops
+const retryTracker = new WeakMap()
+
+// Response interceptor with enhanced error handling and loop prevention
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
     return response
   },
   async (error: AxiosError) => {
+    const originalRequest = error.config
+    
+    if (!originalRequest) {
+      return Promise.reject(error)
+    }
+    
+    // Prevent infinite loops by tracking retry attempts
+    const retryCount = retryTracker.get(originalRequest) || 0
+    if (retryCount >= 2) {
+      console.warn('Max retry attempts reached for request:', originalRequest.url)
+      return Promise.reject(error)
+    }
+    
     // Don't try to refresh tokens for auth endpoints to avoid infinite loops
-    const isAuthEndpoint = error.config?.url?.includes('/auth/')
+    const isAuthEndpoint = originalRequest.url?.includes('/auth/')
+    const isCSRFEndpoint = originalRequest.url?.includes('/auth/csrf')
     
     if (error.response?.status === 401 && !isAuthEndpoint) {
-      // Try to refresh token
+      // Mark this request as being retried
+      retryTracker.set(originalRequest, retryCount + 1)
+      
       try {
+        // Try to refresh token
         await authApi.refreshToken()
+        
+        // Clear CSRF token to force refresh on next request
+        clearCSRFTokenCache()
+        
         // Retry the original request
-        if (error.config) {
-          return apiClient(error.config)
-        }
+        return apiClient(originalRequest)
       } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError)
+        
         // Clear authentication state and redirect to login
         clearAuthState()
         if (typeof window !== 'undefined') {
           window.location.href = '/auth/login'
         }
+        
+        return Promise.reject(refreshError)
       }
     }
     
-    // Clear CSRF token cache on 403 errors (CSRF token invalid)
+    // Handle CSRF-related errors
     if (error.response?.status === 403) {
+      // Clear CSRF token cache to force refresh on next request
       clearCSRFTokenCache()
+      
+      // If this is not already a CSRF endpoint retry, and not already retried, try once more
+      if (!isCSRFEndpoint && retryCount === 0) {
+        retryTracker.set(originalRequest, retryCount + 1)
+        
+        try {
+          // Force CSRF token refresh and retry
+          const newToken = await getCSRFToken()
+          if (newToken && originalRequest.headers) {
+            originalRequest.headers['X-CSRFToken'] = newToken
+          }
+          return apiClient(originalRequest)
+        } catch (csrfError) {
+          console.error('CSRF token refresh failed:', csrfError)
+        }
+      }
+    }
+    
+    // Handle network errors with exponential backoff for critical operations
+    if (!error.response && retryCount === 0 && originalRequest.method !== 'get') {
+      retryTracker.set(originalRequest, retryCount + 1)
+      
+      // Wait before retry (simple backoff)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      try {
+        return apiClient(originalRequest)
+      } catch (retryError) {
+        console.error('Network retry failed:', retryError)
+      }
     }
     
     return Promise.reject(error)
@@ -192,51 +327,51 @@ export const contractsApi = {
     trader?: number
     counterparty?: number
   }): Promise<PaginatedResponse<Contract>> => {
-    const response = await apiClient.get('/crm/contracts/', { params })
+    const response = await apiClient.get('/contracts/', { params })
     return response.data
   },
 
   getById: async (id: number): Promise<Contract> => {
-    const response = await apiClient.get(`/crm/contracts/${id}/`)
+    const response = await apiClient.get(`/contracts/${id}/`)
     return response.data
   },
 
   create: async (data: ContractCreateData): Promise<Contract> => {
-    const response = await apiClient.post('/crm/contracts/', data)
+    const response = await apiClient.post('/contracts/', data)
     return response.data
   },
 
   update: async (id: number, data: Partial<ContractCreateData>): Promise<Contract> => {
-    const response = await apiClient.put(`/crm/contracts/${id}/`, data)
+    const response = await apiClient.put(`/contracts/${id}/`, data)
     return response.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/crm/contracts/${id}/`)
+    await apiClient.delete(`/contracts/${id}/`)
   },
 
   approve: async (id: number): Promise<{ status: string }> => {
-    const response = await apiClient.post(`/crm/contracts/${id}/approve/`)
+    const response = await apiClient.post(`/contracts/${id}/approve/`)
     return response.data
   },
 
   execute: async (id: number): Promise<{ status: string }> => {
-    const response = await apiClient.post(`/crm/contracts/${id}/execute/`)
+    const response = await apiClient.post(`/contracts/${id}/execute/`)
     return response.data
   },
 
   complete: async (id: number): Promise<{ status: string }> => {
-    const response = await apiClient.post(`/crm/contracts/${id}/complete/`)
+    const response = await apiClient.post(`/contracts/${id}/complete/`)
     return response.data
   },
 
   cancel: async (id: number): Promise<{ status: string }> => {
-    const response = await apiClient.post(`/crm/contracts/${id}/cancel/`)
+    const response = await apiClient.post(`/contracts/${id}/cancel/`)
     return response.data
   },
 
   getDashboardStats: async (): Promise<DashboardStats> => {
-    const response = await apiClient.get('/crm/contracts/dashboard_stats/')
+    const response = await apiClient.get('/contracts/dashboard_stats/')
     return response.data
   },
 }
@@ -251,27 +386,27 @@ export const counterpartiesApi = {
     is_customer?: boolean
     country?: string
   }): Promise<PaginatedResponse<Counterparty>> => {
-    const response = await apiClient.get('/crm/counterparties/', { params })
+    const response = await apiClient.get('/counterparties/', { params })
     return response.data
   },
 
   getById: async (id: number): Promise<Counterparty> => {
-    const response = await apiClient.get(`/crm/counterparties/${id}/`)
+    const response = await apiClient.get(`/counterparties/${id}/`)
     return response.data
   },
 
   create: async (data: Omit<Counterparty, 'id' | 'facilities'>): Promise<Counterparty> => {
-    const response = await apiClient.post('/crm/counterparties/', data)
+    const response = await apiClient.post('/counterparties/', data)
     return response.data
   },
 
   update: async (id: number, data: Partial<Counterparty>): Promise<Counterparty> => {
-    const response = await apiClient.put(`/crm/counterparties/${id}/`, data)
+    const response = await apiClient.put(`/counterparties/${id}/`, data)
     return response.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/crm/counterparties/${id}/`)
+    await apiClient.delete(`/counterparties/${id}/`)
   },
 }
 
@@ -283,27 +418,27 @@ export const commoditiesApi = {
     search?: string
     commodity_group?: number
   }): Promise<PaginatedResponse<Commodity>> => {
-    const response = await apiClient.get('/crm/commodities/', { params })
+    const response = await apiClient.get('/commodities/', { params })
     return response.data
   },
 
   getById: async (id: number): Promise<Commodity> => {
-    const response = await apiClient.get(`/crm/commodities/${id}/`)
+    const response = await apiClient.get(`/commodities/${id}/`)
     return response.data
   },
 
   create: async (data: Omit<Commodity, 'id'>): Promise<Commodity> => {
-    const response = await apiClient.post('/crm/commodities/', data)
+    const response = await apiClient.post('/commodities/', data)
     return response.data
   },
 
   update: async (id: number, data: Partial<Commodity>): Promise<Commodity> => {
-    const response = await apiClient.put(`/crm/commodities/${id}/`, data)
+    const response = await apiClient.put(`/commodities/${id}/`, data)
     return response.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/crm/commodities/${id}/`)
+    await apiClient.delete(`/commodities/${id}/`)
   },
 }
 
@@ -315,27 +450,27 @@ export const contactsApi = {
     search?: string
     status?: string
   }): Promise<Contact[]> => {
-    const response = await apiClient.get('/crm/contacts/', { params })
+    const response = await apiClient.get('/contacts/', { params })
     return response.data.results || response.data
   },
 
   getById: async (id: number): Promise<Contact> => {
-    const response = await apiClient.get(`/crm/contacts/${id}/`)
+    const response = await apiClient.get(`/contacts/${id}/`)
     return response.data
   },
 
   create: async (data: Omit<Contact, 'id' | 'created_at' | 'last_contact'>): Promise<Contact> => {
-    const response = await apiClient.post('/crm/contacts/', data)
+    const response = await apiClient.post('/contacts/', data)
     return response.data
   },
 
   update: async (id: number, data: Partial<Contact>): Promise<Contact> => {
-    const response = await apiClient.put(`/crm/contacts/${id}/`, data)
+    const response = await apiClient.put(`/contacts/${id}/`, data)
     return response.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/crm/contacts/${id}/`)
+    await apiClient.delete(`/contacts/${id}/`)
   },
 }
 
@@ -343,73 +478,73 @@ export const contactsApi = {
 export const referenceDataApi = {
   // Currencies
   getCurrencies: async (): Promise<Currency[]> => {
-    const response = await apiClient.get('/crm/currencies/')
+    const response = await apiClient.get('/currencies/')
     return response.data.results || response.data
   },
 
   // Traders
   getTraders: async (): Promise<Trader[]> => {
-    const response = await apiClient.get('/crm/traders/')
+    const response = await apiClient.get('/traders/')
     return response.data.results || response.data
   },
 
   // Brokers
   getBrokers: async (): Promise<Broker[]> => {
-    const response = await apiClient.get('/crm/brokers/')
+    const response = await apiClient.get('/brokers/')
     return response.data.results || response.data
   },
 
   // Commodity Groups
   getCommodityGroups: async () => {
-    const response = await apiClient.get('/crm/commodity-groups/')
+    const response = await apiClient.get('/commodity-groups/')
     return response.data.results || response.data
   },
 
   // Commodity Types
   getCommodityTypes: async () => {
-    const response = await apiClient.get('/crm/commodity-types/')
+    const response = await apiClient.get('/commodity-types/')
     return response.data.results || response.data
   },
 
   // Commodity Subtypes
   getCommoditySubtypes: async () => {
-    const response = await apiClient.get('/crm/commodity-subtypes/')
+    const response = await apiClient.get('/commodity-subtypes/')
     return response.data.results || response.data
   },
 
   // Cost Centers
   getCostCenters: async () => {
-    const response = await apiClient.get('/crm/cost-centers/')
+    const response = await apiClient.get('/cost-centers/')
     return response.data.results || response.data
   },
 
   // Delivery Formats
   getDeliveryFormats: async () => {
-    const response = await apiClient.get('/crm/delivery-formats/')
+    const response = await apiClient.get('/delivery-formats/')
     return response.data.results || response.data
   },
 
   // Additives
   getAdditives: async () => {
-    const response = await apiClient.get('/crm/additives/')
+    const response = await apiClient.get('/additives/')
     return response.data.results || response.data
   },
 
   // Sociedades
   getSociedades: async () => {
-    const response = await apiClient.get('/crm/sociedades/')
+    const response = await apiClient.get('/sociedades/')
     return response.data.results || response.data
   },
 
   // Trade Operation Types
   getTradeOperationTypes: async () => {
-    const response = await apiClient.get('/crm/trade-operation-types/')
+    const response = await apiClient.get('/trade-operation-types/')
     return response.data.results || response.data
   },
 
   // ICOTERMS
   getIcoterms: async () => {
-    const response = await apiClient.get('/crm/icoterms/')
+    const response = await apiClient.get('/icoterms/')
     return response.data.results || response.data
   },
 }
@@ -448,9 +583,30 @@ export const tradersApi = {
   }
 }
 
+// Client-side authentication state check
+const hasAuthTokens = (): boolean => {
+  if (typeof document === 'undefined') {
+    return false // SSR - assume no auth
+  }
+  
+  // Check if access_token or refresh_token cookies exist
+  const cookies = document.cookie.split(';').map(cookie => cookie.trim())
+  const hasAccessToken = cookies.some(cookie => cookie.startsWith('access_token='))
+  const hasRefreshToken = cookies.some(cookie => cookie.startsWith('refresh_token='))
+  
+  return hasAccessToken || hasRefreshToken
+}
+
+// Additional utility functions for debugging and state management
+export const getCSRFTokenState = () => ({ ...csrfState })
+export const forceCSRFTokenRefresh = () => {
+  clearCSRFTokenCache()
+  return getCSRFToken()
+}
+
 // Export the main API client
 export default apiClient
 
 // Export utility functions
-export { clearAuthState, clearCSRFTokenCache }
+export { clearAuthState, clearCSRFTokenCache, getCSRFToken, hasAuthTokens }
 
