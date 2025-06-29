@@ -15,7 +15,7 @@ from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
-    Contract, Counterparty_Facility
+    Contract, Counterparty_Facility, Trade_Setting
 )
 from .serializers import (
     CurrencySerializer, CostCenterSerializer, TraderSerializer,
@@ -24,7 +24,7 @@ from .serializers import (
     BrokerSerializer, ICOTERMSerializer, DeliveryFormatSerializer,
     AdditiveSerializer, SociedadSerializer, TradeOperationTypeSerializer,
     ContractSerializer, ContractListSerializer, ContractCreateSerializer,
-    CounterpartyFacilitySerializer, DashboardStatsSerializer
+    CounterpartyFacilitySerializer, DashboardStatsSerializer, TradeSettingSerializer
 )
 
 
@@ -309,3 +309,45 @@ class ContractViewSet(viewsets.ModelViewSet):
             {'error': 'Contract cannot be cancelled'},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+class TradeSettingViewSet(viewsets.ModelViewSet):
+    queryset = Trade_Setting.objects.all()
+    serializer_class = TradeSettingSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['setting_type', 'is_active']
+    search_fields = ['setting_name', 'description']
+    ordering = ['setting_name']
+
+    @action(detail=False, methods=['get'])
+    def active_settings(self, request):
+        """Get only active settings"""
+        active_settings = self.get_queryset().filter(is_active=True)
+        serializer = self.get_serializer(active_settings, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        """Toggle the active status of a setting"""
+        setting = self.get_object()
+        setting.is_active = not setting.is_active
+        setting.save()
+        return Response({
+            'status': f'Setting {"activated" if setting.is_active else "deactivated"}',
+            'is_active': setting.is_active
+        })
+
+    @action(detail=False, methods=['get'])
+    def by_type(self, request):
+        """Get settings grouped by type"""
+        setting_type = request.query_params.get('type')
+        if not setting_type:
+            return Response(
+                {'error': 'type parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        settings = self.get_queryset().filter(setting_type=setting_type, is_active=True)
+        serializer = self.get_serializer(settings, many=True)
+        return Response(serializer.data)

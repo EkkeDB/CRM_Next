@@ -94,7 +94,7 @@ export default function DashboardPage() {
         <div className="flex items-center space-x-2 bg-card border rounded-lg px-3 py-2 shadow-sm">
           <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
           <span className="text-sm text-muted-foreground">
-            Last updated: {new Date().toLocaleTimeString()}
+            Last updated: {new Date().toLocaleTimeString('en-US', { timeZone: 'UTC' })}
           </span>
         </div>
       </div>

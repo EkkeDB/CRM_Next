@@ -3,6 +3,7 @@ services:
   backend:
     volumes:
       - ./backend:/app
+      - .:/workspace
       - backend_logs:/app/logs
     environment:
       - DEBUG=1

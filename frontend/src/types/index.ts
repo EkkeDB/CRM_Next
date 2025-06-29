@@ -172,8 +172,10 @@ export interface DeliveryFormat {
 export interface Additive {
   id: number
   additive_name: string
+  additive_code?: string
   additive_cost: string
   description: string
+  is_active: boolean
 }
 
 export interface Sociedad {
@@ -188,6 +190,22 @@ export interface TradeOperationType {
   trade_operation_type_name: string
   operation_code: string
   description: string
+}
+
+export interface Contact {
+  id: number
+  name: string
+  email: string
+  phone: string
+  company: string
+  position: string
+  city: string
+  country: string
+  status: 'active' | 'inactive' | 'lead'
+  source: string
+  notes: string
+  created_at: string
+  last_contact: string
 }
 
 export interface Contract {

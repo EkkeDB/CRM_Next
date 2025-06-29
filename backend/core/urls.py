@@ -22,7 +22,7 @@ urlpatterns = [
     
     # API Endpoints
     path('api/auth/', include('apps.authentication.urls')),
-    path('api/crm/', include('apps.nextcrm.urls')),
+    path('api/', include('apps.nextcrm.urls')),
 ]
 
 # Serve media files in development

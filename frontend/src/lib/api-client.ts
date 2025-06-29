@@ -11,6 +11,7 @@ import type {
   Currency,
   Trader,
   Broker,
+  Contact,
   DashboardStats,
   PaginatedResponse,
   ApiResponse,
@@ -29,14 +30,61 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// Function to get CSRF token
+// CSRF token cache to prevent infinite recursion
+let csrfTokenCache: string | null = null
+let csrfTokenPromise: Promise<string> | null = null
+
+// Function to get CSRF token with caching and recursion prevention
 const getCSRFToken = async (): Promise<string> => {
-  try {
-    const response = await apiClient.get('/auth/csrf/')
-    return response.data.csrfToken
-  } catch (error) {
+  // Return cached token if available
+  if (csrfTokenCache) {
+    return Promise.resolve(csrfTokenCache)
+  }
+  
+  // Return existing promise if request is in progress
+  if (csrfTokenPromise) {
+    return csrfTokenPromise
+  }
+  
+  // Create new request with special config to bypass interceptor
+  // Use a fresh axios instance to avoid any authentication interference
+  const csrfAxios = axios.create({
+    baseURL: API_BASE_URL,
+    timeout: 10000,
+    withCredentials: true, // Keep true for CSRF cookies
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  })
+  
+  csrfTokenPromise = csrfAxios.get('/api/auth/csrf/').then(response => {
+    csrfTokenCache = response.data.csrfToken
+    csrfTokenPromise = null
+    return csrfTokenCache || ''
+  }).catch(error => {
     console.error('Failed to get CSRF token:', error)
+    console.error('Error details:', error.response?.data || error.message)
+    csrfTokenPromise = null
+    // Clear any bad authentication state that might be causing issues
+    clearAuthState()
     return ''
+  })
+  
+  return csrfTokenPromise
+}
+
+// Function to clear CSRF token cache (e.g., on 403 errors)
+const clearCSRFTokenCache = (): void => {
+  csrfTokenCache = null
+  csrfTokenPromise = null
+}
+
+// Function to clear all authentication state
+const clearAuthState = (): void => {
+  clearCSRFTokenCache()
+  if (typeof document !== 'undefined') {
+    document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+    document.cookie = 'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
   }
 }
 
@@ -63,7 +111,10 @@ apiClient.interceptors.response.use(
     return response
   },
   async (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    // Don't try to refresh tokens for auth endpoints to avoid infinite loops
+    const isAuthEndpoint = error.config?.url?.includes('/auth/')
+    
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       // Try to refresh token
       try {
         await authApi.refreshToken()
@@ -72,12 +123,19 @@ apiClient.interceptors.response.use(
           return apiClient(error.config)
         }
       } catch (refreshError) {
-        // Refresh failed, redirect to login
+        // Clear authentication state and redirect to login
+        clearAuthState()
         if (typeof window !== 'undefined') {
           window.location.href = '/auth/login'
         }
       }
     }
+    
+    // Clear CSRF token cache on 403 errors (CSRF token invalid)
+    if (error.response?.status === 403) {
+      clearCSRFTokenCache()
+    }
+    
     return Promise.reject(error)
   }
 )
@@ -249,6 +307,38 @@ export const commoditiesApi = {
   },
 }
 
+// Contacts API
+export const contactsApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+    status?: string
+  }): Promise<Contact[]> => {
+    const response = await apiClient.get('/crm/contacts/', { params })
+    return response.data.results || response.data
+  },
+
+  getById: async (id: number): Promise<Contact> => {
+    const response = await apiClient.get(`/crm/contacts/${id}/`)
+    return response.data
+  },
+
+  create: async (data: Omit<Contact, 'id' | 'created_at' | 'last_contact'>): Promise<Contact> => {
+    const response = await apiClient.post('/crm/contacts/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<Contact>): Promise<Contact> => {
+    const response = await apiClient.put(`/crm/contacts/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/crm/contacts/${id}/`)
+  },
+}
+
 // Reference Data APIs
 export const referenceDataApi = {
   // Currencies
@@ -360,4 +450,7 @@ export const tradersApi = {
 
 // Export the main API client
 export default apiClient
+
+// Export utility functions
+export { clearAuthState, clearCSRFTokenCache }
 

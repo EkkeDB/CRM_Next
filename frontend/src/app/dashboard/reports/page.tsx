@@ -152,7 +152,7 @@ export default function ReportsPage() {
       // Monthly analysis
       const monthlyData = new Map()
       filteredContracts.forEach(contract => {
-        const monthKey = new Date(contract.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+        const monthKey = new Date(contract.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', timeZone: 'UTC' })
         if (!monthlyData.has(monthKey)) {
           monthlyData.set(monthKey, { count: 0, value: 0 })
         }

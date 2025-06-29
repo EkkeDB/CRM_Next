@@ -20,12 +20,18 @@ class CookieJWTAuthentication(JWTAuthentication):
         
         if raw_token is None:
             # Fallback to header-based authentication
-            return super().authenticate(request)
+            header_result = super().authenticate(request)
+            # If header authentication also returns None, return None to allow anonymous access
+            return header_result
         
-        validated_token = self.get_validated_token(raw_token)
-        user = self.get_user(validated_token)
-        
-        return (user, validated_token)
+        try:
+            validated_token = self.get_validated_token(raw_token)
+            user = self.get_user(validated_token)
+            return (user, validated_token)
+        except (InvalidToken, TokenError):
+            # If token is invalid, return None to allow anonymous access
+            # This allows endpoints with @permission_classes([AllowAny]) to work
+            return None
 
     def get_validated_token(self, raw_token):
         """

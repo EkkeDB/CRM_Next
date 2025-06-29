@@ -11,102 +11,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Users, Mail, Phone, MapPin, Building2, Activity } from 'lucide-react'
+import { contactsApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface Contact {
-  id: number
-  name: string
-  email: string
-  phone: string
-  company: string
-  position: string
-  city: string
-  country: string
-  status: 'active' | 'inactive' | 'lead'
-  source: string
-  notes: string
-  created_at: string
-  last_contact: string
-}
-
-// Mock data - replace with API calls
-const mockContacts: Contact[] = [
-  {
-    id: 1,
-    name: 'Robert Thompson',
-    email: 'robert@amazon.com',
-    phone: '(773) 614-2345',
-    company: 'Amazon',
-    position: 'Procurement Manager',
-    city: 'Seattle',
-    country: 'USA',
-    status: 'active',
-    source: 'Website',
-    notes: 'Interested in bulk commodity purchases',
-    created_at: '2024-01-15',
-    last_contact: '2024-06-01'
-  },
-  {
-    id: 2,
-    name: 'Steven Scott',
-    email: 'steven@google.com',
-    phone: '(516) 671-9514',
-    company: 'Google',
-    position: 'Supply Chain Director',
-    city: 'Mountain View',
-    country: 'USA',
-    status: 'active',
-    source: 'Referral',
-    notes: 'Key decision maker for tech infrastructure',
-    created_at: '2024-02-10',
-    last_contact: '2024-05-28'
-  },
-  {
-    id: 3,
-    name: 'Sam Jones',
-    email: 'sam@apple.com',
-    phone: '(345) 726-0479',
-    company: 'Apple',
-    position: 'Materials Manager',
-    city: 'Cupertino',
-    country: 'USA',
-    status: 'lead',
-    source: 'Cold Outreach',
-    notes: 'Potential high-value client for rare earth elements',
-    created_at: '2024-03-05',
-    last_contact: '2024-05-20'
-  },
-  {
-    id: 4,
-    name: 'Emily Chen',
-    email: 'emily@tesla.com',
-    phone: '(415) 123-4567',
-    company: 'Tesla',
-    position: 'Battery Materials Specialist',
-    city: 'Austin',
-    country: 'USA',
-    status: 'active',
-    source: 'Trade Show',
-    notes: 'Focuses on lithium and cobalt sourcing',
-    created_at: '2024-04-12',
-    last_contact: '2024-06-03'
-  },
-  {
-    id: 5,
-    name: 'Michael Rodriguez',
-    email: 'mrodriguez@boeing.com',
-    phone: '(206) 987-6543',
-    company: 'Boeing',
-    position: 'Aerospace Materials Engineer',
-    city: 'Chicago',
-    country: 'USA',
-    status: 'inactive',
-    source: 'LinkedIn',
-    notes: 'Specialized in titanium and aluminum alloys',
-    created_at: '2024-01-22',
-    last_contact: '2024-04-15'
-  }
-]
+import type { Contact } from '@/types'
 
 const CONTACT_STATUSES = [
   { value: 'active', label: 'Active' },
@@ -119,8 +26,8 @@ const CONTACT_SOURCES = [
 ]
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>(mockContacts)
-  const [loading, setLoading] = useState(false)
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -140,18 +47,34 @@ export default function ContactsPage() {
     notes: ''
   })
 
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const data = await contactsApi.getAll()
+      setContacts(data)
+    } catch (error) {
+      console.error('Error fetching contacts:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch contacts',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      setLoading(true)
       if (editingContact) {
         // Update existing contact
-        const updatedContact = {
-          ...editingContact,
-          ...formData,
-          id: editingContact.id,
-          created_at: editingContact.created_at,
-          last_contact: new Date().toISOString().split('T')[0]
-        }
+        const updatedContact = await contactsApi.update(editingContact.id, formData)
         setContacts(contacts.map(c => c.id === editingContact.id ? updatedContact : c))
         toast({
           title: 'Success',
@@ -159,12 +82,7 @@ export default function ContactsPage() {
         })
       } else {
         // Create new contact
-        const newContact: Contact = {
-          ...formData,
-          id: Math.max(...contacts.map(c => c.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0],
-          last_contact: new Date().toISOString().split('T')[0]
-        }
+        const newContact = await contactsApi.create(formData)
         setContacts([...contacts, newContact])
         toast({
           title: 'Success',
@@ -181,6 +99,8 @@ export default function ContactsPage() {
         description: 'Failed to save contact',
         variant: 'destructive'
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -205,6 +125,7 @@ export default function ContactsPage() {
     if (!confirm('Are you sure you want to delete this contact?')) return
     
     try {
+      await contactsApi.delete(id)
       setContacts(contacts.filter(c => c.id !== id))
       toast({
         title: 'Success',
@@ -268,6 +189,14 @@ export default function ContactsPage() {
   })
 
   const stats = getStatusStats()
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -587,7 +516,7 @@ export default function ContactsPage() {
                     <span className="text-sm">{contact.source}</span>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm">{new Date(contact.last_contact).toLocaleDateString()}</span>
+                    <span className="text-sm">{new Date(contact.last_contact).toLocaleDateString('en-US', { timeZone: 'UTC' })}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
@@ -610,6 +539,18 @@ export default function ContactsPage() {
               <p className="text-sm text-gray-400">Try adjusting your search or filters</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Note */}
+      <Card className="mt-6">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Users className="h-4 w-4" />
+            <span>
+              Contact data is managed through the database with full CRUD operations. All contact information is now persistent.
+            </span>
+          </div>
         </CardContent>
       </Card>
     </div>

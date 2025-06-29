@@ -439,7 +439,7 @@ export default function ContractsPage() {
                   <TableCell>{contract.trader_name || 'N/A'}</TableCell>
                   <TableCell>{contract.quantity}</TableCell>
                   <TableCell>{contract.price} {contract.trade_currency_code || ''}</TableCell>
-                  <TableCell>{new Date(contract.date).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(contract.date).toLocaleDateString('en-US', { timeZone: 'UTC' })}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadgeVariant(contract.status)}>
                       {contract.status}

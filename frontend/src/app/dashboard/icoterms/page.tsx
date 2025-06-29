@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,122 +10,94 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Globe, Ship, TrendingUp } from 'lucide-react'
+import { referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-
-interface Icoterm {
-  id: number
-  icoterm_code: string
-  icoterm_name: string
-  description: string
-  category: 'departure' | 'main_carriage' | 'arrival'
-  is_active: boolean
-  risk_transfer_point: string
-  cost_responsibility: string
-  created_at: string
-}
-
-const mockIcoterms: Icoterm[] = [
-  {
-    id: 1,
-    icoterm_code: 'EXW',
-    icoterm_name: 'Ex Works',
-    description: 'The seller makes the goods available at their premises',
-    category: 'departure',
-    is_active: true,
-    risk_transfer_point: 'Seller premises',
-    cost_responsibility: 'Buyer bears all costs from pickup',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    icoterm_code: 'FOB',
-    icoterm_name: 'Free on Board',
-    description: 'Seller delivers goods on board the vessel nominated by buyer',
-    category: 'main_carriage',
-    is_active: true,
-    risk_transfer_point: 'When goods pass ship rail at port of shipment',
-    cost_responsibility: 'Seller pays costs until goods are on board',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    icoterm_code: 'CIF',
-    icoterm_name: 'Cost, Insurance and Freight',
-    description: 'Seller pays costs and freight to bring goods to port of destination',
-    category: 'main_carriage',
-    is_active: true,
-    risk_transfer_point: 'When goods pass ship rail at port of shipment',
-    cost_responsibility: 'Seller pays cost, insurance, and freight',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    icoterm_code: 'DDP',
-    icoterm_name: 'Delivered Duty Paid',
-    description: 'Seller delivers goods cleared for import at named place',
-    category: 'arrival',
-    is_active: true,
-    risk_transfer_point: 'Named place in country of importation',
-    cost_responsibility: 'Seller bears all costs including duties',
-    created_at: '2024-01-01'
-  },
-  {
-    id: 5,
-    icoterm_code: 'DAP',
-    icoterm_name: 'Delivered at Place',
-    description: 'Seller delivers when goods are placed at disposal of buyer',
-    category: 'arrival',
-    is_active: true,
-    risk_transfer_point: 'Named place of destination',
-    cost_responsibility: 'Seller bears costs until place of destination',
-    created_at: '2024-01-01'
-  }
-]
-
-const categoryOptions = [
-  { value: 'departure', label: 'Departure' },
-  { value: 'main_carriage', label: 'Main Carriage' },
-  { value: 'arrival', label: 'Arrival' }
-]
+import type { ICOTERM } from '@/types'
 
 export default function IcotermsPage() {
-  const [icoterms, setIcoterms] = useState<Icoterm[]>(mockIcoterms)
+  const [icoterms, setIcoterms] = useState<ICOTERM[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingIcoterm, setEditingIcoterm] = useState<Icoterm | null>(null)
+  const [editingIcoterm, setEditingIcoterm] = useState<ICOTERM | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
     icoterm_code: '',
     icoterm_name: '',
-    description: '',
-    category: 'departure' as Icoterm['category'],
-    risk_transfer_point: '',
-    cost_responsibility: '',
-    is_active: true
+    description: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const data = await referenceDataApi.getIcoterms()
+      setIcoterms(data)
+    } catch (error) {
+      console.error('Error fetching ICOTERMS:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch ICOTERMS',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (editingIcoterm) {
-        const updated = { ...editingIcoterm, ...formData }
-        setIcoterms(icoterms.map(i => i.id === editingIcoterm.id ? updated : i))
-        toast({ title: 'Success', description: 'ICOTERM updated successfully' })
-      } else {
-        const newIcoterm: Icoterm = {
-          ...formData,
-          id: Math.max(...icoterms.map(i => i.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setIcoterms([...icoterms, newIcoterm])
-        toast({ title: 'Success', description: 'ICOTERM created successfully' })
-      }
+      // Note: API endpoints for ICOTERM CRUD may not be implemented yet
+      toast({
+        title: 'Info',
+        description: 'ICOTERM create/update API endpoints not yet implemented',
+        variant: 'default'
+      })
+      
       setDialogOpen(false)
       setEditingIcoterm(null)
       resetForm()
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save ICOTERM', variant: 'destructive' })
+      console.error('Error saving ICOTERM:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to save ICOTERM',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleEdit = (icoterm: ICOTERM) => {
+    setEditingIcoterm(icoterm)
+    setFormData({
+      icoterm_code: icoterm.icoterm_code,
+      icoterm_name: icoterm.icoterm_name,
+      description: icoterm.description
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this ICOTERM?')) return
+    
+    try {
+      toast({
+        title: 'Info',
+        description: 'ICOTERM delete API endpoint not yet implemented',
+        variant: 'default'
+      })
+    } catch (error) {
+      console.error('Error deleting ICOTERM:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete ICOTERM',
+        variant: 'destructive'
+      })
     }
   }
 
@@ -133,27 +105,22 @@ export default function IcotermsPage() {
     setFormData({
       icoterm_code: '',
       icoterm_name: '',
-      description: '',
-      category: 'departure',
-      risk_transfer_point: '',
-      cost_responsibility: '',
-      is_active: true
+      description: ''
     })
-  }
-
-  const getCategoryBadgeVariant = (category: string) => {
-    switch (category) {
-      case 'departure': return 'default'
-      case 'main_carriage': return 'secondary'
-      case 'arrival': return 'outline'
-      default: return 'outline'
-    }
   }
 
   const filteredIcoterms = icoterms.filter(icoterm =>
     icoterm.icoterm_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     icoterm.icoterm_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -180,34 +147,21 @@ export default function IcotermsPage() {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>ICOTERM Code *</Label>
-                  <Input
-                    value={formData.icoterm_code}
-                    onChange={(e) => setFormData({ ...formData, icoterm_code: e.target.value.toUpperCase() })}
-                    required
-                    placeholder="EXW"
-                  />
-                </div>
-                <div>
-                  <Label>Category *</Label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value as Icoterm['category'] })}
-                    className="w-full p-2 border rounded"
-                    required
-                  >
-                    {categoryOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <Label htmlFor="icoterm_code">ICOTERM Code *</Label>
+                <Input
+                  id="icoterm_code"
+                  value={formData.icoterm_code}
+                  onChange={(e) => setFormData({ ...formData, icoterm_code: e.target.value.toUpperCase() })}
+                  required
+                  placeholder="EXW"
+                />
               </div>
               
               <div>
-                <Label>ICOTERM Name *</Label>
+                <Label htmlFor="icoterm_name">ICOTERM Name *</Label>
                 <Input
+                  id="icoterm_name"
                   value={formData.icoterm_name}
                   onChange={(e) => setFormData({ ...formData, icoterm_name: e.target.value })}
                   required
@@ -216,41 +170,13 @@ export default function IcotermsPage() {
               </div>
 
               <div>
-                <Label>Description</Label>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
+                  id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description of the ICOTERM..."
                 />
-              </div>
-
-              <div>
-                <Label>Risk Transfer Point</Label>
-                <Input
-                  value={formData.risk_transfer_point}
-                  onChange={(e) => setFormData({ ...formData, risk_transfer_point: e.target.value })}
-                  placeholder="When risk transfers to buyer..."
-                />
-              </div>
-
-              <div>
-                <Label>Cost Responsibility</Label>
-                <Input
-                  value={formData.cost_responsibility}
-                  onChange={(e) => setFormData({ ...formData, cost_responsibility: e.target.value })}
-                  placeholder="Who bears what costs..."
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -266,8 +192,63 @@ export default function IcotermsPage() {
         </Dialog>
       </div>
 
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Globe className="h-8 w-8 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total ICOTERMS</p>
+                <p className="text-2xl font-bold">{icoterms.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Ship className="h-8 w-8 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">With Description</p>
+                <p className="text-2xl font-bold">
+                  {icoterms.filter(i => i.description && i.description.trim()).length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-8 w-8 text-orange-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Most Recent</p>
+                <p className="text-lg font-bold">
+                  {icoterms.length > 0 ? icoterms[icoterms.length - 1].icoterm_code : 'N/A'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Globe className="h-8 w-8 text-purple-600" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
+                <p className="text-2xl font-bold">Active</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card className="mb-6">
-        <CardContent className="p-4">
+        <CardHeader>
+          <CardTitle className="text-lg">Search</CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="flex items-center space-x-2">
             <Search className="h-4 w-4 text-gray-400" />
             <Input
@@ -290,10 +271,8 @@ export default function IcotermsPage() {
               <TableRow>
                 <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Risk Transfer</TableHead>
-                <TableHead>Cost Responsibility</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -302,43 +281,26 @@ export default function IcotermsPage() {
                 <TableRow key={icoterm.id}>
                   <TableCell className="font-medium">{icoterm.icoterm_code}</TableCell>
                   <TableCell>{icoterm.icoterm_name}</TableCell>
-                  <TableCell>
-                    <Badge variant={getCategoryBadgeVariant(icoterm.category)}>
-                      {icoterm.category.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {icoterm.risk_transfer_point || 'Not specified'}
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {icoterm.cost_responsibility || 'Not specified'}
+                  <TableCell className="max-w-xs">
+                    <p className="text-sm text-muted-foreground truncate">
+                      {icoterm.description || 'No description provided'}
+                    </p>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={icoterm.is_active ? "default" : "secondary"}>
-                      {icoterm.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                    <span className="text-sm text-muted-foreground">#{icoterm.id}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setEditingIcoterm(icoterm)
-                        setFormData({
-                          icoterm_code: icoterm.icoterm_code,
-                          icoterm_name: icoterm.icoterm_name,
-                          description: icoterm.description,
-                          category: icoterm.category,
-                          risk_transfer_point: icoterm.risk_transfer_point,
-                          cost_responsibility: icoterm.cost_responsibility,
-                          is_active: icoterm.is_active
-                        })
-                        setDialogOpen(true)
-                      }}>
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(icoterm)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setIcoterms(icoterms.filter(i => i.id !== icoterm.id))
-                        toast({ title: 'Success', description: 'ICOTERM deleted successfully' })
-                      }}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleDelete(icoterm.id)}
+                        disabled
+                        title="Delete functionality not yet implemented"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

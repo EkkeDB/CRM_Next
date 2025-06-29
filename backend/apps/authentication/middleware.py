@@ -48,10 +48,19 @@ class SecurityLoggingMiddleware:
 
     def is_rate_limited(self, ip_address):
         """Check if IP is rate limited"""
+        from django.conf import settings
+        
+        # Skip rate limiting if disabled in settings
+        if hasattr(settings, 'RATELIMIT_ENABLE') and not settings.RATELIMIT_ENABLE:
+            return False
+            
         cache_key = f"rate_limit_{ip_address}"
         requests = cache.get(cache_key, 0)
         
-        if requests >= 100:  # 100 requests per minute
+        # Allow more requests in development
+        max_requests = 500 if settings.DEBUG else 100  # 500 requests per minute in debug mode
+        
+        if requests >= max_requests:
             return True
         
         cache.set(cache_key, requests + 1, 60)  # 1 minute window

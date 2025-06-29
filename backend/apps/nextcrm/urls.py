@@ -10,7 +10,7 @@ from .views import (
     CommodityViewSet, CounterpartyViewSet, CounterpartyFacilityViewSet,
     BrokerViewSet, ICOTERMViewSet, DeliveryFormatViewSet,
     AdditiveViewSet, SociedadViewSet, TradeOperationTypeViewSet,
-    ContractViewSet
+    ContractViewSet, TradeSettingViewSet
 )
 
 router = DefaultRouter()
@@ -31,6 +31,7 @@ router.register(r'delivery-formats', DeliveryFormatViewSet)
 router.register(r'additives', AdditiveViewSet)
 router.register(r'sociedades', SociedadViewSet)
 router.register(r'trade-operation-types', TradeOperationTypeViewSet)
+router.register(r'trade-settings', TradeSettingViewSet)
 router.register(r'contracts', ContractViewSet)
 
 urlpatterns = [

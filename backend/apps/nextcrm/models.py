@@ -11,6 +11,10 @@ class Currency(models.Model):
     currency_name = models.CharField(max_length=50)
     currency_symbol = models.CharField(max_length=5, blank=True)
     
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = 'currencies'
         verbose_name_plural = 'Currencies'
@@ -22,6 +26,10 @@ class Currency(models.Model):
 class Cost_Center(models.Model):
     cost_center_name = models.CharField(max_length=50)
     description = models.TextField(blank=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'cost_centers'
@@ -37,6 +45,10 @@ class Trader(models.Model):
     email = models.EmailField(unique=True, blank=True)
     phone = models.CharField(max_length=20, blank=True)
     
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = 'traders'
 
@@ -47,6 +59,10 @@ class Trader(models.Model):
 class Commodity_Group(models.Model):
     commodity_group_name = models.CharField(max_length=50)
     description = models.TextField(blank=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'commodity_groups'
@@ -62,6 +78,10 @@ class Commodity_Type(models.Model):
     commodity_group = models.ForeignKey(Commodity_Group, on_delete=models.CASCADE, related_name='commodity_types')
     description = models.TextField(blank=True)
     
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = 'commodity_types'
         verbose_name = 'Commodity Type'
@@ -75,6 +95,10 @@ class Commodity_Subtype(models.Model):
     commodity_subtype_name = models.CharField(max_length=50)
     commodity_type = models.ForeignKey(Commodity_Type, on_delete=models.CASCADE, related_name='commodity_subtypes')
     description = models.TextField(blank=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'commodity_subtypes'
@@ -90,6 +114,10 @@ class Commodity(models.Model):
     commodity_name_full = models.CharField(max_length=200, blank=True)
     commodity_subtype = models.ForeignKey(Commodity_Subtype, on_delete=models.CASCADE, related_name='commodities')
     unit_of_measure = models.CharField(max_length=20, default='MT')
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'commodities'
@@ -121,6 +149,10 @@ class Counterparty(models.Model):
     is_supplier = models.BooleanField(default=False)
     is_customer = models.BooleanField(default=True)
     
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = 'counterparties'
         verbose_name_plural = 'Counterparties'
@@ -136,6 +168,10 @@ class Broker(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = 'brokers'
 
@@ -147,6 +183,10 @@ class ICOTERM(models.Model):
     icoterm_name = models.CharField(max_length=50)
     icoterm_code = models.CharField(max_length=10, unique=True)
     description = models.TextField(blank=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'icoterms'
@@ -162,6 +202,10 @@ class Delivery_Format(models.Model):
     delivery_format_cost = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField(blank=True)
     
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = 'delivery_formats'
         verbose_name = 'Delivery Format'
@@ -176,6 +220,10 @@ class Additive(models.Model):
     additive_cost = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField(blank=True)
     
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     class Meta:
         db_table = 'additives'
 
@@ -187,6 +235,10 @@ class Sociedad(models.Model):
     sociedad_name = models.CharField(max_length=50)
     tax_id = models.CharField(max_length=20, unique=True, blank=True)
     address = models.TextField(blank=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'sociedades'
@@ -200,6 +252,10 @@ class Trade_Operation_Type(models.Model):
     trade_operation_type_name = models.CharField(max_length=50)
     operation_code = models.CharField(max_length=10, unique=True, blank=True)
     description = models.TextField(blank=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'trade_operation_types'
@@ -345,3 +401,45 @@ class Counterparty_Facility(models.Model):
 
     def __str__(self):
         return f"{self.counterparty.counterparty_name} - {self.counterparty_facility_name}"
+
+
+class Trade_Setting(models.Model):
+    setting_name = models.CharField(max_length=100, unique=True)
+    setting_value = models.TextField()
+    setting_type = models.CharField(max_length=20, choices=[
+        ('string', 'String'),
+        ('integer', 'Integer'),
+        ('decimal', 'Decimal'),
+        ('boolean', 'Boolean'),
+        ('json', 'JSON'),
+    ], default='string')
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'trade_settings'
+        verbose_name = 'Trade Setting'
+        verbose_name_plural = 'Trade Settings'
+        ordering = ['setting_name']
+
+    def __str__(self):
+        return f"{self.setting_name}: {self.setting_value}"
+    
+    def get_typed_value(self):
+        """Return the setting value converted to its proper type"""
+        if self.setting_type == 'integer':
+            return int(self.setting_value)
+        elif self.setting_type == 'decimal':
+            from decimal import Decimal
+            return Decimal(self.setting_value)
+        elif self.setting_type == 'boolean':
+            return self.setting_value.lower() in ('true', '1', 'yes', 'on')
+        elif self.setting_type == 'json':
+            import json
+            return json.loads(self.setting_value)
+        else:
+            return self.setting_value

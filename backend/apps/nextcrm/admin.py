@@ -7,7 +7,7 @@ from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
-    Contract, Counterparty_Facility
+    Contract, Counterparty_Facility, Trade_Setting
 )
 
 
@@ -39,14 +39,18 @@ class CommodityGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Commodity_Type)
 class CommodityTypeAdmin(admin.ModelAdmin):
-    list_display = ('commodity_type_name', 'description')
-    search_fields = ('commodity_type_name',)
+    list_display = ('commodity_type_name', 'commodity_group', 'description')
+    list_filter = ('commodity_group',)
+    search_fields = ('commodity_type_name', 'commodity_group__commodity_group_name')
+    ordering = ('commodity_group__commodity_group_name', 'commodity_type_name')
 
 
 @admin.register(Commodity_Subtype)
 class CommoditySubtypeAdmin(admin.ModelAdmin):
-    list_display = ('commodity_subtype_name', 'description')
-    search_fields = ('commodity_subtype_name',)
+    list_display = ('commodity_subtype_name', 'commodity_type', 'description')
+    list_filter = ('commodity_type', 'commodity_type__commodity_group')
+    search_fields = ('commodity_subtype_name', 'commodity_type__commodity_type_name')
+    ordering = ('commodity_type__commodity_type_name', 'commodity_subtype_name')
 
 
 @admin.register(Commodity)
@@ -168,3 +172,25 @@ class CounterpartyFacilityAdmin(admin.ModelAdmin):
     list_filter = ('facility_type', 'country', 'is_active')
     search_fields = ('counterparty_facility_name', 'counterparty__counterparty_name')
     ordering = ('counterparty__counterparty_name', 'counterparty_facility_name')
+
+
+@admin.register(Trade_Setting)
+class TradeSettingAdmin(admin.ModelAdmin):
+    list_display = ('setting_name', 'setting_type', 'setting_value', 'is_active', 'created_at', 'updated_at')
+    list_filter = ('setting_type', 'is_active', 'created_at')
+    search_fields = ('setting_name', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('setting_name',)
+    
+    fieldsets = (
+        ('Setting Information', {
+            'fields': ('setting_name', 'setting_type', 'setting_value', 'description')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Audit Information', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )

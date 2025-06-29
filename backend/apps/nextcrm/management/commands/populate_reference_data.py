@@ -99,13 +99,20 @@ class Command(BaseCommand):
         self.stdout.write(f'Created {len(groups_data)} commodity groups')
 
     def create_commodity_types(self):
+        # Get commodity groups to assign relationships
+        groups = list(Commodity_Group.objects.all())
+        
+        if not groups:
+            self.stdout.write(self.style.WARNING('Cannot create commodity types without commodity groups'))
+            return
+        
         types_data = [
-            {'commodity_type_name': 'Wheat', 'description': 'Various types of wheat'},
-            {'commodity_type_name': 'Corn', 'description': 'Corn and corn products'},
-            {'commodity_type_name': 'Crude Oil', 'description': 'Crude oil products'},
-            {'commodity_type_name': 'Gold', 'description': 'Gold and gold products'},
-            {'commodity_type_name': 'Coffee', 'description': 'Coffee beans and products'},
-            {'commodity_type_name': 'Soybeans', 'description': 'Soybean varieties'},
+            {'commodity_type_name': 'Wheat', 'commodity_group': groups[0], 'description': 'Various types of wheat'},
+            {'commodity_type_name': 'Corn', 'commodity_group': groups[0], 'description': 'Corn and corn products'},
+            {'commodity_type_name': 'Crude Oil', 'commodity_group': groups[1], 'description': 'Crude oil products'},
+            {'commodity_type_name': 'Gold', 'commodity_group': groups[2], 'description': 'Gold and gold products'},
+            {'commodity_type_name': 'Coffee', 'commodity_group': groups[3], 'description': 'Coffee beans and products'},
+            {'commodity_type_name': 'Soybeans', 'commodity_group': groups[5], 'description': 'Soybean varieties'},
         ]
         
         for data in types_data:
@@ -114,13 +121,20 @@ class Command(BaseCommand):
         self.stdout.write(f'Created {len(types_data)} commodity types')
 
     def create_commodity_subtypes(self):
+        # Get commodity types to assign relationships
+        types = list(Commodity_Type.objects.all())
+        
+        if not types:
+            self.stdout.write(self.style.WARNING('Cannot create commodity subtypes without commodity types'))
+            return
+        
         subtypes_data = [
-            {'commodity_subtype_name': 'Hard Red Winter', 'description': 'Hard red winter wheat'},
-            {'commodity_subtype_name': 'Yellow Corn', 'description': 'Standard yellow corn'},
-            {'commodity_subtype_name': 'WTI', 'description': 'West Texas Intermediate crude oil'},
-            {'commodity_subtype_name': 'Fine Gold', 'description': '99.9% pure gold'},
-            {'commodity_subtype_name': 'Arabica', 'description': 'Arabica coffee beans'},
-            {'commodity_subtype_name': 'No. 1 Yellow', 'description': 'No. 1 yellow soybeans'},
+            {'commodity_subtype_name': 'Hard Red Winter', 'commodity_type': types[0], 'description': 'Hard red winter wheat'},
+            {'commodity_subtype_name': 'Yellow Corn', 'commodity_type': types[1], 'description': 'Standard yellow corn'},
+            {'commodity_subtype_name': 'WTI', 'commodity_type': types[2], 'description': 'West Texas Intermediate crude oil'},
+            {'commodity_subtype_name': 'Fine Gold', 'commodity_type': types[3], 'description': '99.9% pure gold'},
+            {'commodity_subtype_name': 'Arabica', 'commodity_type': types[4], 'description': 'Arabica coffee beans'},
+            {'commodity_subtype_name': 'No. 1 Yellow', 'commodity_type': types[5], 'description': 'No. 1 yellow soybeans'},
         ]
         
         for data in subtypes_data:
@@ -129,37 +143,29 @@ class Command(BaseCommand):
         self.stdout.write(f'Created {len(subtypes_data)} commodity subtypes')
 
     def create_commodities(self):
-        # Get the first group, type, and subtype for each commodity
-        groups = list(Commodity_Group.objects.all())
-        types = list(Commodity_Type.objects.all())
+        # Get commodity subtypes to assign relationships
         subtypes = list(Commodity_Subtype.objects.all())
         
-        if not (groups and types and subtypes):
-            self.stdout.write(self.style.WARNING('Cannot create commodities without groups, types, and subtypes'))
+        if not subtypes:
+            self.stdout.write(self.style.WARNING('Cannot create commodities without commodity subtypes'))
             return
         
         commodities_data = [
             {
                 'commodity_name_short': 'HRW',
                 'commodity_name_full': 'Hard Red Winter Wheat',
-                'commodity_group': groups[0],  # Grains
-                'commodity_type': types[0],    # Wheat
                 'commodity_subtype': subtypes[0],  # Hard Red Winter
                 'unit_of_measure': 'MT'
             },
             {
                 'commodity_name_short': 'CORN',
                 'commodity_name_full': 'Yellow Corn',
-                'commodity_group': groups[0],  # Grains
-                'commodity_type': types[1],    # Corn
                 'commodity_subtype': subtypes[1],  # Yellow Corn
                 'unit_of_measure': 'MT'
             },
             {
                 'commodity_name_short': 'WTI',
                 'commodity_name_full': 'West Texas Intermediate Crude Oil',
-                'commodity_group': groups[1],  # Energy
-                'commodity_type': types[2],    # Crude Oil
                 'commodity_subtype': subtypes[2],  # WTI
                 'unit_of_measure': 'BBL'
             },
@@ -211,7 +217,10 @@ class Command(BaseCommand):
         ]
         
         for data in counterparties_data:
-            Counterparty.objects.get_or_create(**data)
+            Counterparty.objects.get_or_create(
+                counterparty_code=data['counterparty_code'],
+                defaults=data
+            )
         
         self.stdout.write(f'Created {len(counterparties_data)} counterparties')
 
@@ -234,7 +243,10 @@ class Command(BaseCommand):
         ]
         
         for data in brokers_data:
-            Broker.objects.get_or_create(**data)
+            Broker.objects.get_or_create(
+                broker_code=data['broker_code'],
+                defaults=data
+            )
         
         self.stdout.write(f'Created {len(brokers_data)} brokers')
 

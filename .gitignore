@@ -17,3 +17,7 @@ frontend/.next/
 
 # Misc
 .DS_Store
+
+# Security - JWT tokens and cookies
+cookies.txt
+*.cookies

@@ -2,12 +2,13 @@
 Django REST Framework serializers for NextCRM models.
 """
 
+import json
 from rest_framework import serializers
 from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
-    Contract, Counterparty_Facility
+    Contract, Counterparty_Facility, Trade_Setting
 )
 
 
@@ -203,3 +204,46 @@ class DashboardStatsSerializer(serializers.Serializer):
     top_commodities = serializers.ListField()
     monthly_contract_values = serializers.ListField()
     contract_status_distribution = serializers.ListField()
+
+
+class TradeSettingSerializer(serializers.ModelSerializer):
+    typed_value = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Trade_Setting
+        fields = '__all__'
+        read_only_fields = ('created_at', 'updated_at')
+    
+    def get_typed_value(self, obj):
+        """Return the typed value for display purposes"""
+        try:
+            return obj.get_typed_value()
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return obj.setting_value
+    
+    def validate_setting_value(self, value):
+        """Validate setting value based on setting type"""
+        setting_type = self.initial_data.get('setting_type', 'string')
+        
+        if setting_type == 'integer':
+            try:
+                int(value)
+            except ValueError:
+                raise serializers.ValidationError("Value must be a valid integer")
+        elif setting_type == 'decimal':
+            try:
+                from decimal import Decimal
+                Decimal(value)
+            except (ValueError, TypeError):
+                raise serializers.ValidationError("Value must be a valid decimal")
+        elif setting_type == 'boolean':
+            if value.lower() not in ('true', 'false', '1', '0', 'yes', 'no', 'on', 'off'):
+                raise serializers.ValidationError("Value must be a valid boolean (true/false, 1/0, yes/no, on/off)")
+        elif setting_type == 'json':
+            try:
+                import json
+                json.loads(value)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError("Value must be valid JSON")
+        
+        return value

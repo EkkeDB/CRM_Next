@@ -1,3 +1,10 @@
 {
-  "/page": "app/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
+  "/simple-test/page": "app/simple-test/page.js",
+  "/dashboard-example/page": "app/dashboard-example/page.js",
+  "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
+  "/dashboard/traders/page": "app/dashboard/traders/page.js",
+  "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }
