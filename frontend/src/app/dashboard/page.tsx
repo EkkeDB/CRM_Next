@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
   DollarSign, 
@@ -79,6 +79,19 @@ function LoadingSkeleton() {
 }
 
 export default function DashboardPage() {
+  const [currentTime, setCurrentTime] = useState<string>('')
+
+  useEffect(() => {
+    // Update time after hydration
+    setCurrentTime(new Date().toLocaleTimeString())
+    
+    // Optional: Update time every minute
+    const interval = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString())
+    }, 60000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className="space-y-8 p-6">
@@ -94,7 +107,11 @@ export default function DashboardPage() {
         <div className="flex items-center space-x-2 bg-card border rounded-lg px-3 py-2 shadow-sm">
           <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
           <span className="text-sm text-muted-foreground">
+<<<<<<< HEAD
             Last updated: {new Date().toLocaleTimeString('en-US', { timeZone: 'UTC' })}
+=======
+            Last updated: {currentTime || 'Loading...'}
+>>>>>>> 612e6669c62694c4c2751ac98743e61f6c1373b7
           </span>
         </div>
       </div>

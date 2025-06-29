@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     LoginView, LogoutView, RegisterView, UserProfileView,
     ChangePasswordView, SecurityLogViewSet, AuditLogViewSet,
-    UserViewSet, me, health_check, CustomTokenObtainPairView,
+    UserViewSet, me, health_check, ping, CustomTokenObtainPairView,
     CustomTokenRefreshView, csrf_token
 )
 
@@ -31,6 +31,7 @@ urlpatterns = [
     
     # Utility endpoints
     path('health/', health_check, name='health_check'),
+    path('ping/', ping, name='ping'),
     path('csrf/', csrf_token, name='csrf_token'),
     
     # Include router URLs

@@ -11,6 +11,7 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/layout.js"
     ],
+<<<<<<< HEAD
     "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -21,31 +22,62 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/contracts/page.js"
     ],
+=======
+>>>>>>> 612e6669c62694c4c2751ac98743e61f6c1373b7
     "/dashboard/counterparties/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/counterparties/page.js"
     ],
+<<<<<<< HEAD
     "/dashboard/traders/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/traders/page.js"
     ],
+=======
+>>>>>>> 612e6669c62694c4c2751ac98743e61f6c1373b7
     "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/page.js"
     ],
+<<<<<<< HEAD
     "/simple-test/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/simple-test/page.js"
     ],
+=======
+>>>>>>> 612e6669c62694c4c2751ac98743e61f6c1373b7
     "/dashboard-example/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard-example/page.js"
     ],
+<<<<<<< HEAD
+=======
+    "/css-test/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/css-test/page.js"
+    ],
+    "/contacts/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/contacts/page.js"
+    ],
+    "/dashboard/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/page.js"
+    ],
+    "/auth/login/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/auth/login/page.js"
+    ],
+>>>>>>> 612e6669c62694c4c2751ac98743e61f6c1373b7
     "/_not-found/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
