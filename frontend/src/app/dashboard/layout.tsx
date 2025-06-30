@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/layout/sidebar'
@@ -13,20 +13,33 @@ export default function DashboardLayout({
 }) {
   const { isAuthenticated, isLoading } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false)
 
   const toggleSidebar = () => setCollapsed(prev => !prev)
 
+  // Delay auth check to prevent race conditions on fresh login
+  useEffect(() => {
+    if (!isLoading) {
+      const timer = setTimeout(() => {
+        setHasCheckedAuth(true)
+      }, 500) // Increased delay to 500ms to let auth state settle properly
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isLoading])
+
   // Show loading spinner while checking authentication
-  if (isLoading) {
+  if (isLoading || !hasCheckedAuth) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+        <p className="ml-4 text-gray-600">Loading dashboard...</p>
       </div>
     )
   }
 
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
+  // Redirect to login if not authenticated (only after auth check delay)
+  if (!isAuthenticated && hasCheckedAuth) {
     redirect('/auth/login')
   }
 

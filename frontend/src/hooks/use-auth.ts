@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { authApi, hasAuthTokens } from '@/lib/api-client'
+import { authApi, hasNonHttpOnlyAuthCookies, waitForAuthentication } from '@/lib/api-client'
 import type { User, LoginCredentials, RegisterData, ChangePasswordData } from '@/types'
 
 // Query keys
@@ -14,7 +14,8 @@ export function useProfile() {
     queryKey: authKeys.profile(),
     queryFn: authApi.getProfile,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    enabled: hasAuthTokens(), // Only make API call if we have auth tokens
+    // Always enabled - let the API call determine auth state since we can't check HttpOnly cookies
+    enabled: true, 
     retry: (failureCount, error: any) => {
       // Don't retry on 401 (unauthorized)
       if (error?.response?.status === 401) {
@@ -31,11 +32,25 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: authApi.login,
-    onSuccess: (data) => {
-      // Set user data in cache
+    onSuccess: async (data) => {
+      console.log('Login mutation success, received data:', data)
+      
+      // Wait briefly for the browser to process Set-Cookie headers
+      await waitForAuthentication(1, 200) // Brief wait for cookie processing
+      console.log('Login successful, cookies should be set by browser')
+      
+      // Set user data in cache immediately since backend confirmed success
       queryClient.setQueryData(authKeys.profile(), data.user)
-      // Invalidate and refetch user profile
-      queryClient.invalidateQueries({ queryKey: authKeys.profile() })
+      
+      // Invalidate and refetch profile queries to ensure fresh state
+      await queryClient.invalidateQueries({ queryKey: authKeys.profile() })
+      
+      console.log('Login mutation completed successfully')
+    },
+    onError: (error: any) => {
+      console.error('Login mutation failed:', error.response?.status, error.message)
+      // Clear any potentially stale auth data
+      queryClient.removeQueries({ queryKey: authKeys.profile() })
     },
   })
 }
@@ -86,7 +101,6 @@ export function useChangePassword() {
 
 // Authentication status hook
 export function useAuth() {
-  const hasTokens = hasAuthTokens()
   const {
     data: user,
     isLoading,
@@ -94,17 +108,8 @@ export function useAuth() {
     error,
   } = useProfile()
 
-  // If no tokens exist, we're definitely not authenticated
-  if (!hasTokens) {
-    return {
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      isError: false,
-      error: null,
-    }
-  }
-
+  // Since we can't check HttpOnly cookies from JavaScript, we rely entirely on the API response
+  // The useProfile query will make a request to /auth/me/ and determine auth state
   const isAuthenticated = !!user && !isError
 
   return {

@@ -157,14 +157,17 @@ const clearAuthState = (): void => {
 // Request interceptor with enhanced error handling
 apiClient.interceptors.request.use(
   async (config) => {
-    // Add CSRF token for non-GET requests, but not for auth endpoints to prevent loops
-    const isAuthEndpoint = config.url?.includes('/auth/')
+    // Add CSRF token for non-GET requests that require it
+    const isCSRFEndpoint = config.url?.includes('/auth/csrf')
+    const isHealthEndpoint = config.url?.includes('/auth/health')
     
-    if (config.method !== 'get' && !isAuthEndpoint) {
+    // Add CSRF token for all non-GET requests except CSRF endpoint itself and health check
+    if (config.method !== 'get' && !isCSRFEndpoint && !isHealthEndpoint) {
       try {
         const csrfToken = await getCSRFToken()
         if (csrfToken) {
           config.headers['X-CSRFToken'] = csrfToken
+          console.debug('Added CSRF token to request:', config.url)
         } else {
           console.warn('No CSRF token available for request:', config.url)
         }
@@ -278,42 +281,90 @@ apiClient.interceptors.response.use(
 // Authentication API
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<{ user: User; message: string }> => {
-    const response = await apiClient.post('/auth/login/', credentials)
-    return response.data
+    try {
+      // Ensure we have a fresh CSRF token before login
+      console.log('Fetching CSRF token before login...')
+      const csrfToken = await getCSRFToken()
+      console.log('CSRF token obtained:', csrfToken ? 'Yes' : 'No')
+      
+      const response = await apiClient.post('/auth/login/', credentials)
+      console.log('Login API response:', response.status, response.statusText)
+      return response.data
+    } catch (error: any) {
+      console.error('Login API error:', error.response?.status, error.response?.statusText, error.message)
+      console.error('Login API error details:', error.response?.data)
+      // Re-throw to ensure error is properly propagated
+      throw error
+    }
   },
 
   logout: async (): Promise<void> => {
-    await apiClient.post('/auth/logout/')
+    try {
+      await apiClient.post('/auth/logout/')
+    } catch (error: any) {
+      console.error('Logout API error:', error.response?.status, error.message)
+      throw error
+    }
   },
 
   register: async (data: RegisterData): Promise<{ message: string; user_id: number }> => {
-    const response = await apiClient.post('/auth/register/', data)
-    return response.data
+    try {
+      const response = await apiClient.post('/auth/register/', data)
+      return response.data
+    } catch (error: any) {
+      console.error('Register API error:', error.response?.status, error.message)
+      throw error
+    }
   },
 
   refreshToken: async (): Promise<{ message: string }> => {
-    const response = await apiClient.post('/auth/token/refresh/')
-    return response.data
+    try {
+      const response = await apiClient.post('/auth/token/refresh/')
+      return response.data
+    } catch (error: any) {
+      console.error('Refresh token API error:', error.response?.status, error.message)
+      throw error
+    }
   },
 
   getProfile: async (): Promise<User> => {
-    const response = await apiClient.get('/auth/me/')
-    return response.data
+    try {
+      const response = await apiClient.get('/auth/me/')
+      return response.data
+    } catch (error: any) {
+      console.error('Get profile API error:', error.response?.status, error.message)
+      throw error
+    }
   },
 
   updateProfile: async (data: Partial<User>): Promise<User> => {
-    const response = await apiClient.put('/auth/profile/', data)
-    return response.data
+    try {
+      const response = await apiClient.put('/auth/profile/', data)
+      return response.data
+    } catch (error: any) {
+      console.error('Update profile API error:', error.response?.status, error.message)
+      throw error
+    }
   },
 
   changePassword: async (data: ChangePasswordData): Promise<{ message: string }> => {
-    const response = await apiClient.post('/auth/change-password/', data)
-    return response.data
+    try {
+      const response = await apiClient.post('/auth/change-password/', data)
+      return response.data
+    } catch (error: any) {
+      console.error('Change password API error:', error.response?.status, error.message)
+      throw error
+    }
   },
 
   healthCheck: async (): Promise<{ status: string }> => {
-    const response = await apiClient.get('/auth/health/')
-    return response.data
+    try {
+      const response = await apiClient.get('/auth/health/')
+      return response.data
+    } catch (error: any) {
+      console.error('Health check API error:', error.response?.status, error.message)
+      throw error
+    }
   },
 }
 
@@ -583,18 +634,32 @@ export const tradersApi = {
   }
 }
 
-// Client-side authentication state check
-const hasAuthTokens = (): boolean => {
+// Client-side authentication state check with retry logic
+// NOTE: We cannot check HttpOnly cookies via document.cookie (by design for security)
+// This function now only checks for non-HttpOnly auth-related cookies (like CSRF tokens)
+const hasNonHttpOnlyAuthCookies = (): boolean => {
   if (typeof document === 'undefined') {
     return false // SSR - assume no auth
   }
   
-  // Check if access_token or refresh_token cookies exist
+  // Check for non-HttpOnly cookies that might indicate an active session
+  // We cannot and should not check HttpOnly cookies from JavaScript
   const cookies = document.cookie.split(';').map(cookie => cookie.trim())
-  const hasAccessToken = cookies.some(cookie => cookie.startsWith('access_token='))
-  const hasRefreshToken = cookies.some(cookie => cookie.startsWith('refresh_token='))
+  const hasCSRFToken = cookies.some(cookie => cookie.startsWith('csrftoken='))
   
-  return hasAccessToken || hasRefreshToken
+  console.debug('Non-HttpOnly auth cookies check:', { hasCSRFToken, cookies: document.cookie })
+  // Don't return false just because we can't see HttpOnly cookies
+  // This will be handled by the useProfile query which makes an API call
+  return true // Always assume tokens might exist - let the API call determine auth state
+}
+
+// Wait for authentication to be established (via API call, not cookie detection)
+const waitForAuthentication = async (maxAttempts: number = 5, delayMs: number = 100): Promise<boolean> => {
+  console.debug('Waiting for authentication to be established via API calls...')
+  // Since we can't check HttpOnly cookies, we just wait a moment for the browser
+  // to process the Set-Cookie headers, then let the API call determine auth state
+  await new Promise(resolve => setTimeout(resolve, delayMs))
+  return true // Always return true - let the /auth/me API call determine the real state
 }
 
 // Additional utility functions for debugging and state management
@@ -607,6 +672,6 @@ export const forceCSRFTokenRefresh = () => {
 // Export the main API client
 export default apiClient
 
-// Export utility functions
-export { clearAuthState, clearCSRFTokenCache, getCSRFToken, hasAuthTokens }
+// Export utility functions  
+export { clearAuthState, clearCSRFTokenCache, getCSRFToken, hasNonHttpOnlyAuthCookies, waitForAuthentication }
 

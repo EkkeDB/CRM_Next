@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState } from 'react'
-import { useLogin } from '@/hooks/use-auth'
+import React, { useState, useEffect, useCallback } from 'react'
+import { useLogin, useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,10 +17,63 @@ export default function LoginPage() {
     username: '',
     password: '',
   })
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<string[]>([])
   
   const login = useLogin()
+  const { isAuthenticated, isLoading } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+
+  // Debug logger
+  const addDebugLog = useCallback((message: string) => {
+    const timestamp = new Date().toISOString().substr(11, 12)
+    const logMessage = `[${timestamp}] ${message}`
+    console.log(logMessage)
+    setDebugInfo(prev => [...prev.slice(-20), logMessage]) // Keep last 20 logs
+  }, [])
+
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    addDebugLog(`Auth state changed: isAuthenticated=${isAuthenticated}, isLoading=${isLoading}`)
+    if (isAuthenticated && !isLoading) {
+      addDebugLog('Already authenticated, redirecting to dashboard')
+      router.push('/dashboard')
+    }
+  }, [isAuthenticated, isLoading, router, addDebugLog])
+
+  // Debug authentication state changes
+  useEffect(() => {
+    addDebugLog(`Auth state: isAuthenticated=${isAuthenticated}, isLoading=${isLoading}`)
+  }, [isAuthenticated, isLoading, addDebugLog])
+
+  // Timeout fallback for login state (extended to 10 seconds)
+  useEffect(() => {
+    if (isLoggingIn) {
+      addDebugLog('Login timeout timer started (10 seconds)')
+      const timeout = setTimeout(() => {
+        addDebugLog(`Timeout fired! isLoggingIn is still: ${isLoggingIn}`)
+        // Double check the current state since this is a closure
+        setIsLoggingIn(prevState => {
+          if (prevState) {
+            addDebugLog('Login timeout triggered - showing error message')
+            toast({
+              title: 'Login Timeout',
+              description: 'Login took too long. Please check your connection and try again.',
+              variant: 'destructive',
+            })
+            return false
+          }
+          return prevState
+        })
+      }, 10000) // Extended to 10 seconds
+
+      return () => {
+        addDebugLog('Login timeout timer cleared')
+        clearTimeout(timeout)
+      }
+    }
+  }, [isLoggingIn, toast, addDebugLog])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -33,20 +86,47 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (!formData.username || !formData.password) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter both username and password',
+        variant: 'destructive',
+      })
+      return
+    }
+    
     try {
-      await login.mutateAsync(formData)
+      addDebugLog('Login form submitted, setting isLoggingIn to true')
+      setIsLoggingIn(true)
+      addDebugLog(`Attempting login with credentials: ${formData.username}`)
+      
+      const result = await login.mutateAsync(formData)
+      addDebugLog(`login.mutateAsync completed successfully: ${JSON.stringify(result?.message)}`)
+      
+      // Show success message
       toast({
         title: 'Success',
         description: 'Login successful! Redirecting to dashboard...',
         variant: 'default',
       })
-      router.push('/dashboard')
-    } catch (error) {
+      
+      addDebugLog('Setting delay before redirect to allow auth state and cookies to update')
+      // Extended delay to allow auth state and cookies to be set properly
+      setTimeout(() => {
+        addDebugLog('Executing redirect to dashboard')
+        router.push('/dashboard')
+      }, 300) // Increased delay to 300ms
+      
+    } catch (error: any) {
+      addDebugLog(`Login failed with error: ${error?.response?.status} - ${parseApiError(error)}`)
       toast({
         title: 'Login Failed',
         description: parseApiError(error),
         variant: 'destructive',
       })
+    } finally {
+      addDebugLog('Clearing isLoggingIn state')
+      setIsLoggingIn(false)
     }
   }
 
@@ -98,7 +178,7 @@ export default function LoginPage() {
                   value={formData.username}
                   onChange={handleChange}
                   placeholder="Enter your username"
-                  disabled={login.isPending}
+                  disabled={login.isPending || isLoggingIn}
                   className="h-12 bg-white/50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 focus:border-primary focus:ring-primary/20"
                 />
               </div>
@@ -115,7 +195,7 @@ export default function LoginPage() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Enter your password"
-                  disabled={login.isPending}
+                  disabled={login.isPending || isLoggingIn}
                   className="h-12 bg-white/50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 focus:border-primary focus:ring-primary/20"
                 />
               </div>
@@ -123,9 +203,9 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full h-12 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                disabled={login.isPending}
+                disabled={login.isPending || isLoggingIn}
               >
-                {login.isPending ? 'Signing in...' : 'Sign in'}
+                {login.isPending || isLoggingIn ? 'Signing in...' : 'Sign in'}
               </Button>
 
               {/* Demo credentials */}
@@ -144,6 +224,7 @@ export default function LoginPage() {
                 </div>
               </div>
             </form>
+
 
             <div className="mt-8 text-center">
               <p className="text-sm text-slate-600 dark:text-slate-400">

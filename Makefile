@@ -168,3 +168,11 @@ health:
 	@curl -f http://localhost:3000/api/health || echo "Frontend: ❌"
 	@curl -f http://localhost:8000/api/auth/health/ || echo "Backend: ❌"
 	@echo "Health check complete"
+
+
+# Make reset
+reset:
+	docker compose down -v
+	docker rm -f nextcrm_postgres nextcrm_redis || true
+	docker volume prune -f
+	docker network prune -f
