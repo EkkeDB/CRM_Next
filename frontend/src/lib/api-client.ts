@@ -600,37 +600,251 @@ export const referenceDataApi = {
   },
 }
 
-// Traders API (currently limited - needs backend implementation for full CRUD)
+// Traders API
 export const tradersApi = {
   getAll: async (params?: {
     page?: number
     page_size?: number
     search?: string
-  }): Promise<Trader[]> => {
-    // Use the reference data endpoint for now
-    return referenceDataApi.getTraders()
+  }): Promise<PaginatedResponse<Trader>> => {
+    const response = await apiClient.get('/traders/', { params })
+    return response.data
   },
 
   getById: async (id: number): Promise<Trader> => {
-    const traders = await referenceDataApi.getTraders()
-    const trader = traders.find(t => t.id === id)
-    if (!trader) throw new Error('Trader not found')
-    return trader
+    const response = await apiClient.get(`/traders/${id}/`)
+    return response.data
   },
 
-  create: async (data: Omit<Trader, 'id'>): Promise<Trader> => {
-    // This endpoint needs to be implemented in the backend
-    throw new Error('Create trader endpoint not implemented in backend. Please contact administrator.')
+  create: async (data: Omit<Trader, 'id' | 'created_at' | 'updated_at'>): Promise<Trader> => {
+    const response = await apiClient.post('/traders/', data)
+    return response.data
   },
 
   update: async (id: number, data: Partial<Trader>): Promise<Trader> => {
-    // This endpoint needs to be implemented in the backend  
-    throw new Error('Update trader endpoint not implemented in backend. Please contact administrator.')
+    const response = await apiClient.put(`/traders/${id}/`, data)
+    return response.data
   },
 
   delete: async (id: number): Promise<void> => {
-    // This endpoint needs to be implemented in the backend
-    throw new Error('Delete trader endpoint not implemented in backend. Please contact administrator.')
+    await apiClient.delete(`/traders/${id}/`)
+  }
+}
+
+// Currencies API
+export const currenciesApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<Currency>> => {
+    const response = await apiClient.get('/currencies/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<Currency> => {
+    const response = await apiClient.get(`/currencies/${id}/`)
+    return response.data
+  },
+
+  create: async (data: Omit<Currency, 'id' | 'created_at' | 'updated_at'>): Promise<Currency> => {
+    const response = await apiClient.post('/currencies/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<Currency>): Promise<Currency> => {
+    const response = await apiClient.put(`/currencies/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/currencies/${id}/`)
+  }
+}
+
+// Additives API
+export const additivesApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<any>> => {
+    const response = await apiClient.get('/additives/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/additives/${id}/`)
+    return response.data
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await apiClient.post('/additives/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await apiClient.put(`/additives/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/additives/${id}/`)
+  }
+}
+
+// Delivery Formats API
+export const deliveryFormatsApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<any>> => {
+    const response = await apiClient.get('/delivery-formats/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/delivery-formats/${id}/`)
+    return response.data
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await apiClient.post('/delivery-formats/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await apiClient.put(`/delivery-formats/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/delivery-formats/${id}/`)
+  }
+}
+
+// ICOTERMS API
+export const icotermsApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<any>> => {
+    const response = await apiClient.get('/icoterms/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/icoterms/${id}/`)
+    return response.data
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await apiClient.post('/icoterms/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await apiClient.put(`/icoterms/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/icoterms/${id}/`)
+  }
+}
+
+// Cost Centers API
+export const costCentersApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<any>> => {
+    const response = await apiClient.get('/cost-centers/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/cost-centers/${id}/`)
+    return response.data
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await apiClient.post('/cost-centers/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await apiClient.put(`/cost-centers/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/cost-centers/${id}/`)
+  }
+}
+
+// Sociedades API
+export const sociedadesApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<any>> => {
+    const response = await apiClient.get('/sociedades/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/sociedades/${id}/`)
+    return response.data
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await apiClient.post('/sociedades/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await apiClient.put(`/sociedades/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/sociedades/${id}/`)
+  }
+}
+
+// Trade Operation Types API
+export const tradeOperationTypesApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<any>> => {
+    const response = await apiClient.get('/trade-operation-types/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/trade-operation-types/${id}/`)
+    return response.data
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await apiClient.post('/trade-operation-types/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await apiClient.put(`/trade-operation-types/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/trade-operation-types/${id}/`)
   }
 }
 

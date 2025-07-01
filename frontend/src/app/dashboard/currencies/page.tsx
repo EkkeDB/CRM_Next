@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Plus, Search, Edit, Trash2, DollarSign, TrendingUp, Globe } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { currenciesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { Currency } from '@/types'
 
@@ -33,8 +33,8 @@ export default function CurrenciesPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const data = await referenceDataApi.getCurrencies()
-      setCurrencies(data)
+      const response = await currenciesApi.getAll()
+      setCurrencies(response.results || response)
     } catch (error) {
       console.error('Error fetching currencies:', error)
       toast({
@@ -50,21 +50,28 @@ export default function CurrenciesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for currency CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Currency create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingCurrency) {
+        await currenciesApi.update(editingCurrency.id, formData)
+        toast({
+          title: 'Success',
+          description: 'Currency updated successfully'
+        })
+      } else {
+        await currenciesApi.create(formData)
+        toast({
+          title: 'Success',
+          description: 'Currency created successfully'
+        })
+      }
       setDialogOpen(false)
       setEditingCurrency(null)
       resetForm()
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error saving currency:', error)
       toast({
         title: 'Error',
-        description: 'Failed to save currency',
+        description: error.response?.data?.detail || 'Failed to save currency',
         variant: 'destructive'
       })
     }
@@ -84,16 +91,17 @@ export default function CurrenciesPage() {
     if (!confirm('Are you sure you want to delete this currency?')) return
     
     try {
+      await currenciesApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'Currency delete API endpoint not yet implemented',
-        variant: 'default'
+        title: 'Success',
+        description: 'Currency deleted successfully'
       })
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error deleting currency:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete currency',
+        description: error.response?.data?.detail || 'Failed to delete currency',
         variant: 'destructive'
       })
     }
@@ -309,8 +317,6 @@ export default function CurrenciesPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(currency.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -336,7 +342,7 @@ export default function CurrenciesPage() {
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Globe className="h-4 w-4" />
             <span>
-              Currency data is loaded from the database. Create/Update/Delete operations require API implementation.
+              Currency data is loaded from the database with full CRUD operations available.
             </span>
           </div>
         </CardContent>

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Building2, TrendingUp } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { referenceDataApi, sociedadesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { Sociedad } from '@/types'
 
@@ -26,6 +26,8 @@ export default function SociedadesPage() {
     tax_id: '',
     address: ''
   })
+  const [submitting, setSubmitting] = useState(false)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetchData()
@@ -48,26 +50,68 @@ export default function SociedadesPage() {
     }
   }
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.sociedad_name.trim()) {
+      errors.sociedad_name = 'Sociedad name is required'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
     try {
-      // Note: API endpoints for sociedad CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Sociedad create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      setSubmitting(true)
+      setFormErrors({})
+
+      if (editingSociedad) {
+        await sociedadesApi.update(editingSociedad.id, formData)
+        toast({
+          title: 'Success',
+          description: 'Sociedad updated successfully'
+        })
+      } else {
+        await sociedadesApi.create(formData)
+        toast({
+          title: 'Success',
+          description: 'Sociedad created successfully'
+        })
+      }
       setDialogOpen(false)
       setEditingSociedad(null)
       resetForm()
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error saving sociedad:', error)
+      
+      // Handle specific validation errors from the backend
+      if (error.response?.status === 400 && error.response?.data) {
+        const backendErrors: Record<string, string> = {}
+        Object.keys(error.response.data).forEach(key => {
+          if (Array.isArray(error.response.data[key])) {
+            backendErrors[key] = error.response.data[key][0]
+          } else {
+            backendErrors[key] = error.response.data[key]
+          }
+        })
+        setFormErrors(backendErrors)
+      }
+      
       toast({
         title: 'Error',
-        description: 'Failed to save sociedad',
+        description: error.response?.data?.detail || 'Failed to save sociedad',
         variant: 'destructive'
       })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -85,18 +129,22 @@ export default function SociedadesPage() {
     if (!confirm('Are you sure you want to delete this sociedad?')) return
     
     try {
+      setLoading(true)
+      await sociedadesApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'Sociedad delete API endpoint not yet implemented',
-        variant: 'default'
+        title: 'Success',
+        description: 'Sociedad deleted successfully'
       })
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error deleting sociedad:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete sociedad',
+        description: error.response?.data?.detail || 'Failed to delete sociedad',
         variant: 'destructive'
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -106,6 +154,7 @@ export default function SociedadesPage() {
       tax_id: '',
       address: ''
     })
+    setFormErrors({})
   }
 
   const filteredSociedades = sociedades.filter(sociedad =>
@@ -155,7 +204,11 @@ export default function SociedadesPage() {
                   onChange={(e) => setFormData({ ...formData, sociedad_name: e.target.value })}
                   required
                   placeholder="Main Trading Entity"
+                  className={formErrors.sociedad_name ? 'border-red-500' : ''}
                 />
+                {formErrors.sociedad_name && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.sociedad_name}</p>
+                )}
               </div>
 
               <div>
@@ -179,11 +232,18 @@ export default function SociedadesPage() {
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-violet-600 hover:bg-violet-700">
-                  {editingSociedad ? 'Update' : 'Create'}
+                <Button type="submit" className="bg-violet-600 hover:bg-violet-700" disabled={submitting}>
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      {editingSociedad ? 'Updating...' : 'Creating...'}
+                    </div>
+                  ) : (
+                    editingSociedad ? 'Update Sociedad' : 'Create Sociedad'
+                  )}
                 </Button>
               </div>
             </form>
@@ -307,8 +367,7 @@ export default function SociedadesPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(sociedad.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
+                        disabled={loading}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -321,17 +380,6 @@ export default function SociedadesPage() {
         </CardContent>
       </Card>
 
-      {/* Note */}
-      <Card className="mt-6">
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Building2 className="h-4 w-4" />
-            <span>
-              Sociedad data is loaded from the database. Create/Update/Delete operations require API implementation.
-            </span>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

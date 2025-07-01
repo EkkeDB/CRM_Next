@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Briefcase, Building2, TrendingUp } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { referenceDataApi, costCentersApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { CostCenter } from '@/types'
 
@@ -25,6 +25,8 @@ export default function CostCentersPage() {
     cost_center_name: '',
     description: ''
   })
+  const [submitting, setSubmitting] = useState(false)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetchData()
@@ -47,26 +49,68 @@ export default function CostCentersPage() {
     }
   }
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.cost_center_name.trim()) {
+      errors.cost_center_name = 'Cost center name is required'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
     try {
-      // Note: API endpoints for cost center CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Cost center create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      setSubmitting(true)
+      setFormErrors({})
+
+      if (editingCostCenter) {
+        await costCentersApi.update(editingCostCenter.id, formData)
+        toast({
+          title: 'Success',
+          description: 'Cost center updated successfully'
+        })
+      } else {
+        await costCentersApi.create(formData)
+        toast({
+          title: 'Success',
+          description: 'Cost center created successfully'
+        })
+      }
       setDialogOpen(false)
       setEditingCostCenter(null)
       resetForm()
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error saving cost center:', error)
+      
+      // Handle specific validation errors from the backend
+      if (error.response?.status === 400 && error.response?.data) {
+        const backendErrors: Record<string, string> = {}
+        Object.keys(error.response.data).forEach(key => {
+          if (Array.isArray(error.response.data[key])) {
+            backendErrors[key] = error.response.data[key][0]
+          } else {
+            backendErrors[key] = error.response.data[key]
+          }
+        })
+        setFormErrors(backendErrors)
+      }
+      
       toast({
         title: 'Error',
-        description: 'Failed to save cost center',
+        description: error.response?.data?.detail || 'Failed to save cost center',
         variant: 'destructive'
       })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -83,18 +127,22 @@ export default function CostCentersPage() {
     if (!confirm('Are you sure you want to delete this cost center?')) return
     
     try {
+      setLoading(true)
+      await costCentersApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'Cost center delete API endpoint not yet implemented',
-        variant: 'default'
+        title: 'Success',
+        description: 'Cost center deleted successfully'
       })
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error deleting cost center:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete cost center',
+        description: error.response?.data?.detail || 'Failed to delete cost center',
         variant: 'destructive'
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -103,6 +151,7 @@ export default function CostCentersPage() {
       cost_center_name: '',
       description: ''
     })
+    setFormErrors({})
   }
 
   const filteredCostCenters = costCenters.filter(center =>
@@ -155,7 +204,11 @@ export default function CostCentersPage() {
                   onChange={(e) => setFormData({ ...formData, cost_center_name: e.target.value })}
                   required
                   placeholder="Trading Operations"
+                  className={formErrors.cost_center_name ? 'border-red-500' : ''}
                 />
+                {formErrors.cost_center_name && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.cost_center_name}</p>
+                )}
               </div>
 
               <div>
@@ -169,11 +222,18 @@ export default function CostCentersPage() {
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-purple-600 hover:bg-purple-700">
-                  {editingCostCenter ? 'Update Cost Center' : 'Create Cost Center'}
+                <Button type="submit" className="bg-purple-600 hover:bg-purple-700" disabled={submitting}>
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      {editingCostCenter ? 'Updating...' : 'Creating...'}
+                    </div>
+                  ) : (
+                    editingCostCenter ? 'Update Cost Center' : 'Create Cost Center'
+                  )}
                 </Button>
               </div>
             </form>
@@ -303,8 +363,7 @@ export default function CostCentersPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(center.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
+                        disabled={loading}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -324,17 +383,6 @@ export default function CostCentersPage() {
         </CardContent>
       </Card>
 
-      {/* Note */}
-      <Card className="mt-6">
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Briefcase className="h-4 w-4" />
-            <span>
-              Cost center data is loaded from the database. Create/Update/Delete operations require API implementation.
-            </span>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

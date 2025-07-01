@@ -40,7 +40,7 @@ export default function TradersPage() {
         contractsApi.getAll()
       ])
 
-      setTraders(tradersRes)
+      setTraders(tradersRes.results || tradersRes)
       setContracts(contractsRes.results || contractsRes)
     } catch (error) {
       console.error('Error fetching traders:', error)
@@ -411,8 +411,6 @@ export default function TradersPage() {
                           variant="outline" 
                           size="sm" 
                           onClick={() => handleDelete(trader.id)}
-                          disabled
-                          title="Delete functionality not yet implemented"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -440,8 +438,7 @@ export default function TradersPage() {
             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
               <Activity className="h-4 w-4" />
               <span>
-                Performance metrics are calculated based on contract data. 
-                Create/Edit/Delete operations require backend API implementation.
+                Performance metrics are calculated based on contract data and updated in real-time.
               </span>
             </div>
           </CardContent>

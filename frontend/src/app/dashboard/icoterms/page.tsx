@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Globe, Ship, TrendingUp } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { referenceDataApi, icotermsApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { ICOTERM } from '@/types'
 
@@ -27,6 +27,8 @@ export default function IcotermsPage() {
     icoterm_name: '',
     description: ''
   })
+  const [submitting, setSubmitting] = useState(false)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetchData()
@@ -49,26 +51,72 @@ export default function IcotermsPage() {
     }
   }
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.icoterm_name.trim()) {
+      errors.icoterm_name = 'ICOTERM name is required'
+    }
+
+    if (!formData.icoterm_code.trim()) {
+      errors.icoterm_code = 'ICOTERM code is required'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
     try {
-      // Note: API endpoints for ICOTERM CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'ICOTERM create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      setSubmitting(true)
+      setFormErrors({})
+
+      if (editingIcoterm) {
+        await icotermsApi.update(editingIcoterm.id, formData)
+        toast({
+          title: 'Success',
+          description: 'ICOTERM updated successfully'
+        })
+      } else {
+        await icotermsApi.create(formData)
+        toast({
+          title: 'Success',
+          description: 'ICOTERM created successfully'
+        })
+      }
       setDialogOpen(false)
       setEditingIcoterm(null)
       resetForm()
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error saving ICOTERM:', error)
+      
+      // Handle specific validation errors from the backend
+      if (error.response?.status === 400 && error.response?.data) {
+        const backendErrors: Record<string, string> = {}
+        Object.keys(error.response.data).forEach(key => {
+          if (Array.isArray(error.response.data[key])) {
+            backendErrors[key] = error.response.data[key][0]
+          } else {
+            backendErrors[key] = error.response.data[key]
+          }
+        })
+        setFormErrors(backendErrors)
+      }
+      
       toast({
         title: 'Error',
-        description: 'Failed to save ICOTERM',
+        description: error.response?.data?.detail || 'Failed to save ICOTERM',
         variant: 'destructive'
       })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -86,18 +134,22 @@ export default function IcotermsPage() {
     if (!confirm('Are you sure you want to delete this ICOTERM?')) return
     
     try {
+      setLoading(true)
+      await icotermsApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'ICOTERM delete API endpoint not yet implemented',
-        variant: 'default'
+        title: 'Success',
+        description: 'ICOTERM deleted successfully'
       })
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error deleting ICOTERM:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete ICOTERM',
+        description: error.response?.data?.detail || 'Failed to delete ICOTERM',
         variant: 'destructive'
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -107,6 +159,7 @@ export default function IcotermsPage() {
       icoterm_name: '',
       description: ''
     })
+    setFormErrors({})
   }
 
   const filteredIcoterms = icoterms.filter(icoterm =>
@@ -155,7 +208,11 @@ export default function IcotermsPage() {
                   onChange={(e) => setFormData({ ...formData, icoterm_code: e.target.value.toUpperCase() })}
                   required
                   placeholder="EXW"
+                  className={formErrors.icoterm_code ? 'border-red-500' : ''}
                 />
+                {formErrors.icoterm_code && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.icoterm_code}</p>
+                )}
               </div>
               
               <div>
@@ -166,7 +223,11 @@ export default function IcotermsPage() {
                   onChange={(e) => setFormData({ ...formData, icoterm_name: e.target.value })}
                   required
                   placeholder="Ex Works"
+                  className={formErrors.icoterm_name ? 'border-red-500' : ''}
                 />
+                {formErrors.icoterm_name && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.icoterm_name}</p>
+                )}
               </div>
 
               <div>
@@ -180,11 +241,18 @@ export default function IcotermsPage() {
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  {editingIcoterm ? 'Update' : 'Create'}
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={submitting}>
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      {editingIcoterm ? 'Updating...' : 'Creating...'}
+                    </div>
+                  ) : (
+                    editingIcoterm ? 'Update ICOTERM' : 'Create ICOTERM'
+                  )}
                 </Button>
               </div>
             </form>
@@ -298,8 +366,7 @@ export default function IcotermsPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(icoterm.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
+                        disabled={loading}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

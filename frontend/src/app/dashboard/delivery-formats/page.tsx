@@ -1,119 +1,138 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Truck } from 'lucide-react'
+import { deliveryFormatsApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 
-interface DeliveryFormat {
-  id: number
-  format_code: string
-  format_name: string
-  description: string
-  transport_mode: string
-  is_active: boolean
-  created_at: string
-}
-
-const mockDeliveryFormats: DeliveryFormat[] = [
-  {
-    id: 1,
-    format_code: 'BULK',
-    format_name: 'Bulk Cargo',
-    description: 'Loose cargo shipped in bulk without packaging',
-    transport_mode: 'Ship',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    format_code: 'CONT',
-    format_name: 'Container',
-    description: 'Goods shipped in standardized containers',
-    transport_mode: 'Ship/Truck/Rail',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    format_code: 'TANK',
-    format_name: 'Tank Transport',
-    description: 'Liquid commodities in tank containers or trucks',
-    transport_mode: 'Truck/Rail',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    format_code: 'BAG',
-    format_name: 'Bagged',
-    description: 'Commodities packaged in bags or sacks',
-    transport_mode: 'Truck/Ship',
-    is_active: true,
-    created_at: '2024-01-01'
-  }
-]
-
 export default function DeliveryFormatsPage() {
-  const [formats, setFormats] = useState<DeliveryFormat[]>(mockDeliveryFormats)
+  const [formats, setFormats] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingFormat, setEditingFormat] = useState<DeliveryFormat | null>(null)
+  const [editingFormat, setEditingFormat] = useState<any | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    format_code: '',
-    format_name: '',
-    description: '',
-    transport_mode: '',
-    is_active: true
+    delivery_format_name: '',
+    delivery_format_cost: '',
+    description: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const response = await deliveryFormatsApi.getAll()
+      setFormats(response.results || response)
+    } catch (error) {
+      console.error('Error fetching delivery formats:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch delivery formats',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      const submitData = {
+        ...formData,
+        delivery_format_cost: parseFloat(formData.delivery_format_cost) || 0
+      }
+
       if (editingFormat) {
-        const updated = { ...editingFormat, ...formData }
-        setFormats(formats.map(f => f.id === editingFormat.id ? updated : f))
-        toast({ title: 'Success', description: 'Delivery format updated successfully' })
+        await deliveryFormatsApi.update(editingFormat.id, submitData)
+        toast({
+          title: 'Success',
+          description: 'Delivery format updated successfully'
+        })
       } else {
-        const newFormat: DeliveryFormat = {
-          ...formData,
-          id: Math.max(...formats.map(f => f.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setFormats([...formats, newFormat])
-        toast({ title: 'Success', description: 'Delivery format created successfully' })
+        await deliveryFormatsApi.create(submitData)
+        toast({
+          title: 'Success',
+          description: 'Delivery format created successfully'
+        })
       }
       setDialogOpen(false)
       setEditingFormat(null)
       resetForm()
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to save delivery format', variant: 'destructive' })
+      fetchData()
+    } catch (error: any) {
+      console.error('Error saving delivery format:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.detail || 'Failed to save delivery format',
+        variant: 'destructive'
+      })
     }
   }
 
   const resetForm = () => {
     setFormData({
-      format_code: '',
-      format_name: '',
-      description: '',
-      transport_mode: '',
-      is_active: true
+      delivery_format_name: '',
+      delivery_format_cost: '',
+      description: ''
     })
   }
 
+  const handleEdit = (format: any) => {
+    setEditingFormat(format)
+    setFormData({
+      delivery_format_name: format.delivery_format_name,
+      delivery_format_cost: format.delivery_format_cost?.toString() || '0',
+      description: format.description || ''
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this delivery format?')) return
+    
+    try {
+      await deliveryFormatsApi.delete(id)
+      toast({
+        title: 'Success',
+        description: 'Delivery format deleted successfully'
+      })
+      fetchData()
+    } catch (error: any) {
+      console.error('Error deleting delivery format:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.detail || 'Failed to delete delivery format',
+        variant: 'destructive'
+      })
+    }
+  }
+
   const filteredFormats = formats.filter(format =>
-    format.format_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    format.format_name.toLowerCase().includes(searchTerm.toLowerCase())
+    format.delivery_format_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (format.description && format.description.toLowerCase().includes(searchTerm.toLowerCase()))
   )
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -141,52 +160,37 @@ export default function DeliveryFormatsPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Format Code *</Label>
+                <Label htmlFor="delivery_format_name">Format Name *</Label>
                 <Input
-                  value={formData.format_code}
-                  onChange={(e) => setFormData({ ...formData, format_code: e.target.value.toUpperCase() })}
-                  required
-                  placeholder="BULK"
-                />
-              </div>
-              
-              <div>
-                <Label>Format Name *</Label>
-                <Input
-                  value={formData.format_name}
-                  onChange={(e) => setFormData({ ...formData, format_name: e.target.value })}
+                  id="delivery_format_name"
+                  value={formData.delivery_format_name}
+                  onChange={(e) => setFormData({ ...formData, delivery_format_name: e.target.value })}
                   required
                   placeholder="Bulk Cargo"
                 />
               </div>
-
+              
               <div>
-                <Label>Transport Mode</Label>
+                <Label htmlFor="delivery_format_cost">Cost *</Label>
                 <Input
-                  value={formData.transport_mode}
-                  onChange={(e) => setFormData({ ...formData, transport_mode: e.target.value })}
-                  placeholder="Ship/Truck/Rail"
+                  id="delivery_format_cost"
+                  type="number"
+                  step="0.01"
+                  value={formData.delivery_format_cost}
+                  onChange={(e) => setFormData({ ...formData, delivery_format_cost: e.target.value })}
+                  required
+                  placeholder="50.00"
                 />
               </div>
 
               <div>
-                <Label>Description</Label>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
+                  id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Description..."
+                  placeholder="Description of the delivery format..."
                 />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -224,49 +228,38 @@ export default function DeliveryFormatsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Transport Mode</TableHead>
+                <TableHead>Cost</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredFormats.map((format) => (
                 <TableRow key={format.id}>
-                  <TableCell className="font-medium">{format.format_code}</TableCell>
-                  <TableCell>{format.format_name}</TableCell>
+                  <TableCell className="font-medium">{format.delivery_format_name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{format.transport_mode}</Badge>
+                    <span className="font-semibold text-green-600">
+                      ${format.delivery_format_cost ? parseFloat(format.delivery_format_cost.toString()).toFixed(2) : '0.00'}
+                    </span>
                   </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {format.description || 'No description'}
+                  <TableCell className="max-w-xs">
+                    <p className="text-sm text-muted-foreground truncate">
+                      {format.description || 'No description provided'}
+                    </p>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={format.is_active ? "default" : "secondary"}>
-                      {format.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {format.created_at ? new Date(format.created_at).toLocaleDateString() : 'N/A'}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setEditingFormat(format)
-                        setFormData({
-                          format_code: format.format_code,
-                          format_name: format.format_name,
-                          description: format.description,
-                          transport_mode: format.transport_mode,
-                          is_active: format.is_active
-                        })
-                        setDialogOpen(true)
-                      }}>
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(format)}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setFormats(formats.filter(f => f.id !== format.id))
-                        toast({ title: 'Success', description: 'Delivery format deleted successfully' })
-                      }}>
+                      <Button variant="outline" size="sm" onClick={() => handleDelete(format.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

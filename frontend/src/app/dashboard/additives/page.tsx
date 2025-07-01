@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Beaker, TrendingUp } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { additivesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { Additive } from '@/types'
 
@@ -23,10 +23,9 @@ export default function AdditivesPage() {
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    additive_code: '',
     additive_name: '',
-    description: '',
-    is_active: true
+    additive_cost: '',
+    description: ''
   })
 
   useEffect(() => {
@@ -36,8 +35,8 @@ export default function AdditivesPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const data = await referenceDataApi.getAdditives()
-      setAdditives(data)
+      const response = await additivesApi.getAll()
+      setAdditives(response.results || response)
     } catch (error) {
       console.error('Error fetching additives:', error)
       toast({
@@ -53,21 +52,34 @@ export default function AdditivesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for additive CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Additive create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
+      const submitData = {
+        ...formData,
+        additive_cost: parseFloat(formData.additive_cost) || 0
+      }
+      
+      if (editingAdditive) {
+        await additivesApi.update(editingAdditive.id, submitData)
+        toast({
+          title: 'Success',
+          description: 'Additive updated successfully'
+        })
+      } else {
+        await additivesApi.create(submitData)
+        toast({
+          title: 'Success',
+          description: 'Additive created successfully'
+        })
+      }
       
       setDialogOpen(false)
       setEditingAdditive(null)
       resetForm()
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error saving additive:', error)
       toast({
         title: 'Error',
-        description: 'Failed to save additive',
+        description: error.response?.data?.detail || 'Failed to save additive',
         variant: 'destructive'
       })
     }
@@ -76,10 +88,9 @@ export default function AdditivesPage() {
   const handleEdit = (additive: Additive) => {
     setEditingAdditive(additive)
     setFormData({
-      additive_code: additive.additive_code || '',
       additive_name: additive.additive_name,
-      description: additive.description,
-      is_active: additive.is_active
+      additive_cost: additive.additive_cost?.toString() || '0',
+      description: additive.description || ''
     })
     setDialogOpen(true)
   }
@@ -88,28 +99,29 @@ export default function AdditivesPage() {
     if (!confirm('Are you sure you want to delete this additive?')) return
     
     try {
+      await additivesApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'Additive delete API endpoint not yet implemented',
-        variant: 'default'
+        title: 'Success',
+        description: 'Additive deleted successfully'
       })
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error deleting additive:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete additive',
+        description: error.response?.data?.detail || 'Failed to delete additive',
         variant: 'destructive'
       })
     }
   }
 
   const resetForm = () => {
-    setFormData({ additive_code: '', additive_name: '', description: '', is_active: true })
+    setFormData({ additive_name: '', additive_cost: '', description: '' })
   }
 
   const filteredAdditives = additives.filter(additive =>
-    additive.additive_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    additive.additive_name.toLowerCase().includes(searchTerm.toLowerCase())
+    additive.additive_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (additive.description && additive.description.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   if (loading) {
@@ -149,16 +161,6 @@ export default function AdditivesPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="additive_code">Additive Code *</Label>
-                <Input
-                  id="additive_code"
-                  value={formData.additive_code}
-                  onChange={(e) => setFormData({ ...formData, additive_code: e.target.value.toUpperCase() })}
-                  required
-                  placeholder="ANTI"
-                />
-              </div>
-              <div>
                 <Label htmlFor="additive_name">Additive Name *</Label>
                 <Input
                   id="additive_name"
@@ -169,6 +171,18 @@ export default function AdditivesPage() {
                 />
               </div>
               <div>
+                <Label htmlFor="additive_cost">Cost *</Label>
+                <Input
+                  id="additive_cost"
+                  type="number"
+                  step="0.01"
+                  value={formData.additive_cost}
+                  onChange={(e) => setFormData({ ...formData, additive_cost: e.target.value })}
+                  required
+                  placeholder="25.50"
+                />
+              </div>
+              <div>
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
@@ -176,16 +190,6 @@ export default function AdditivesPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description of the additive..."
                 />
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="is_active">Active</Label>
               </div>
               <div className="flex justify-end space-x-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
@@ -218,9 +222,9 @@ export default function AdditivesPage() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Active</p>
+                <p className="text-sm font-medium text-muted-foreground">Avg Cost</p>
                 <p className="text-2xl font-bold">
-                  {additives.filter(a => a.is_active).length}
+                  ${additives.length > 0 ? (additives.reduce((sum, a) => sum + (parseFloat(a.additive_cost?.toString() || '0') || 0), 0) / additives.length).toFixed(2) : '0.00'}
                 </p>
               </div>
             </div>
@@ -280,31 +284,31 @@ export default function AdditivesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Cost</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>ID</TableHead>
+                <TableHead>Created</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredAdditives.map((additive) => (
                 <TableRow key={additive.id}>
-                  <TableCell className="font-medium">{additive.additive_code}</TableCell>
-                  <TableCell>{additive.additive_name}</TableCell>
+                  <TableCell className="font-medium">{additive.additive_name}</TableCell>
+                  <TableCell>
+                    <span className="font-semibold text-green-600">
+                      ${additive.additive_cost ? parseFloat(additive.additive_cost.toString()).toFixed(2) : '0.00'}
+                    </span>
+                  </TableCell>
                   <TableCell className="max-w-xs">
                     <p className="text-sm text-muted-foreground truncate">
                       {additive.description || 'No description provided'}
                     </p>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={additive.is_active ? "default" : "secondary"}>
-                      {additive.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">#{additive.id}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {additive.created_at ? new Date(additive.created_at).toLocaleDateString() : 'N/A'}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
@@ -315,8 +319,6 @@ export default function AdditivesPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(additive.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -335,7 +337,7 @@ export default function AdditivesPage() {
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Beaker className="h-4 w-4" />
             <span>
-              Additive data is loaded from the database. Create/Update/Delete operations require API implementation.
+              Additive data is loaded from the database with full CRUD operations available.
             </span>
           </div>
         </CardContent>

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Shuffle, TrendingUp } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { referenceDataApi, tradeOperationTypesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { TradeOperationType } from '@/types'
 
@@ -26,6 +26,8 @@ export default function TradeOperationTypesPage() {
     operation_code: '',
     description: ''
   })
+  const [submitting, setSubmitting] = useState(false)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetchData()
@@ -48,26 +50,68 @@ export default function TradeOperationTypesPage() {
     }
   }
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.trade_operation_type_name.trim()) {
+      errors.trade_operation_type_name = 'Operation name is required'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
     try {
-      // Note: API endpoints for trade operation type CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Trade operation type create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      setSubmitting(true)
+      setFormErrors({})
+
+      if (editingOperationType) {
+        await tradeOperationTypesApi.update(editingOperationType.id, formData)
+        toast({
+          title: 'Success',
+          description: 'Trade operation type updated successfully'
+        })
+      } else {
+        await tradeOperationTypesApi.create(formData)
+        toast({
+          title: 'Success',
+          description: 'Trade operation type created successfully'
+        })
+      }
       setDialogOpen(false)
       setEditingOperationType(null)
       resetForm()
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error saving trade operation type:', error)
+      
+      // Handle specific validation errors from the backend
+      if (error.response?.status === 400 && error.response?.data) {
+        const backendErrors: Record<string, string> = {}
+        Object.keys(error.response.data).forEach(key => {
+          if (Array.isArray(error.response.data[key])) {
+            backendErrors[key] = error.response.data[key][0]
+          } else {
+            backendErrors[key] = error.response.data[key]
+          }
+        })
+        setFormErrors(backendErrors)
+      }
+      
       toast({
         title: 'Error',
-        description: 'Failed to save trade operation type',
+        description: error.response?.data?.detail || 'Failed to save trade operation type',
         variant: 'destructive'
       })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -85,18 +129,22 @@ export default function TradeOperationTypesPage() {
     if (!confirm('Are you sure you want to delete this trade operation type?')) return
     
     try {
+      setLoading(true)
+      await tradeOperationTypesApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'Trade operation type delete API endpoint not yet implemented',
-        variant: 'default'
+        title: 'Success',
+        description: 'Trade operation type deleted successfully'
       })
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error deleting trade operation type:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete trade operation type',
+        description: error.response?.data?.detail || 'Failed to delete trade operation type',
         variant: 'destructive'
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -106,6 +154,7 @@ export default function TradeOperationTypesPage() {
       operation_code: '',
       description: ''
     })
+    setFormErrors({})
   }
 
   const filteredOperationTypes = operationTypes.filter(operationType =>
@@ -155,7 +204,11 @@ export default function TradeOperationTypesPage() {
                   onChange={(e) => setFormData({ ...formData, trade_operation_type_name: e.target.value })}
                   required
                   placeholder="Spot Purchase"
+                  className={formErrors.trade_operation_type_name ? 'border-red-500' : ''}
                 />
+                {formErrors.trade_operation_type_name && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.trade_operation_type_name}</p>
+                )}
               </div>
 
               <div>
@@ -179,11 +232,18 @@ export default function TradeOperationTypesPage() {
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-pink-600 hover:bg-pink-700">
-                  {editingOperationType ? 'Update' : 'Create'}
+                <Button type="submit" className="bg-pink-600 hover:bg-pink-700" disabled={submitting}>
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      {editingOperationType ? 'Updating...' : 'Creating...'}
+                    </div>
+                  ) : (
+                    editingOperationType ? 'Update Operation Type' : 'Create Operation Type'
+                  )}
                 </Button>
               </div>
             </form>
@@ -307,8 +367,7 @@ export default function TradeOperationTypesPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(operationType.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
+                        disabled={loading}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -321,17 +380,6 @@ export default function TradeOperationTypesPage() {
         </CardContent>
       </Card>
 
-      {/* Note */}
-      <Card className="mt-6">
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Shuffle className="h-4 w-4" />
-            <span>
-              Trade operation type data is loaded from the database. Create/Update/Delete operations require API implementation.
-            </span>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }
