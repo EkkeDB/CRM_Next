@@ -1,0 +1,146 @@
+WHY YOU'RE MISSING MENU ITEMS IN DASHBOARD
+==========================================
+
+ISSUE: Dashboard sidebar only shows 6 items instead of all available pages
+
+CURRENT SIDEBAR ITEMS (in /frontend/src/components/layout/Sidebar.tsx):
+- Dashboard
+- Contracts  
+- Counterparties
+- Traders
+- Reports
+- Settings
+
+MISSING ITEMS (Pages exist but not in sidebar menu):
+- Commodities (/dashboard/commodities)
+- Commodity Groups (/dashboard/commodity-groups) 
+- Commodity Subtypes (/dashboard/commodity-subtypes)
+- Commodity Types (/dashboard/commodity-types)
+- Currencies (/dashboard/currencies)
+- Additives (/dashboard/additives)
+- Analytics (/dashboard/analytics)
+- Contacts (/dashboard/contacts)
+- Cost Centers (/dashboard/cost-centers)
+- Delivery Formats (/dashboard/delivery-formats)
+- Incoterms (/dashboard/icoterms)
+- Sociedades (/dashboard/sociedades)
+- Trade Operation Types (/dashboard/trade-operation-types)
+
+ROOT CAUSE:
+The sidebar component (Sidebar.tsx) has a hardcoded menuItems array with only 6 items (lines 24-31). 
+All the missing pages exist as files in /frontend/src/app/dashboard/ but they're not included in the menuItems array.
+
+SOLUTION:
+To see all menu items, the menuItems array in Sidebar.tsx needs to be expanded to include all the missing pages with their respective routes, labels, and icons.
+
+CURRENT STATE: 
+- Pages are accessible by direct URL navigation
+- Pages are not visible in sidebar navigation
+- No technical issues, just incomplete menu configuration
+
+WHY /contracts LOSES SIDEBAR AND TOPBAR
+======================================
+
+ISSUE: Accessing http://localhost:3000/contracts shows no sidebar/topbar
+
+ROOT CAUSE - DIFFERENT FOLDER STRUCTURE:
+- /contracts page is located in: /frontend/src/app/(authenticated)/contracts/page.tsx
+- /dashboard pages are located in: /frontend/src/app/dashboard/[page]/page.tsx
+
+LAYOUT DIFFERENCES:
+- Dashboard pages inherit layout from: /frontend/src/app/dashboard/layout.tsx (includes Sidebar + Header)
+- Contracts page in (authenticated) folder has NO layout.tsx file in that folder
+- Falls back to root layout.tsx which only provides basic HTML structure (no sidebar/header)
+
+FOLDER STRUCTURE ANALYSIS:
+/frontend/src/app/
+├── (authenticated)/contracts/page.tsx ← NO LAYOUT = No sidebar/topbar
+├── dashboard/layout.tsx ← HAS LAYOUT = Includes sidebar/topbar
+├── dashboard/contracts/page.tsx ← Uses dashboard layout
+└── layout.tsx ← Root layout (basic HTML only)
+
+FIX NEEDED:
+Either:
+1. Move /app/(authenticated)/contracts/ to /app/dashboard/contracts/ (but already exists)
+2. Create layout.tsx in /app/(authenticated)/ folder with sidebar/topbar
+3. Use the existing /dashboard/contracts page instead
+
+CURRENT DUPLICATE:
+- /contracts (no layout) - located in (authenticated) folder
+- /dashboard/contracts (with layout) - located in dashboard folder
+
+WHY SIDEBAR LINKS GO TO WRONG ROUTES
+===================================
+
+ISSUE: Sidebar links point to root routes instead of /dashboard/ routes
+
+CURRENT SIDEBAR LINKS (in Sidebar.tsx lines 24-31):
+- Dashboard → /dashboard ✓ (correct)
+- Contracts → /contracts ✗ (should be /dashboard/contracts)
+- Counterparties → /counterparties ✗ (should be /dashboard/counterparties)  
+- Traders → /traders ✗ (should be /dashboard/traders)
+- Reports → /reports ✗ (should be /dashboard/reports)
+- Settings → /settings ✗ (should be /dashboard/settings)
+
+ROOT CAUSE:
+The menuItems array in Sidebar.tsx has hardcoded hrefs that point to root paths like '/counterparties' instead of '/dashboard/counterparties'. This causes:
+1. Loss of sidebar/topbar when clicking menu items
+2. Navigation to pages without proper dashboard layout
+3. Inconsistent user experience
+
+ACTUAL PAGE LOCATIONS:
+- /frontend/src/app/dashboard/counterparties/page.tsx (with layout)
+- /frontend/src/app/dashboard/traders/page.tsx (with layout)  
+- /frontend/src/app/dashboard/reports/page.tsx (with layout)
+- /frontend/src/app/dashboard/settings/page.tsx (with layout)
+- etc.
+
+CLAUDE CODE PROMPT TO FIX THESE ISSUES
+=====================================
+
+Hey Claude Code, I need you to fix two main issues in my NextCRM dashboard:
+
+ISSUE 1: Missing sidebar menu items
+- Currently only 6 items show in sidebar: Dashboard, Contracts, Counterparties, Traders, Reports, Settings
+- But I have 19 dashboard pages available in /frontend/src/app/dashboard/
+- Missing items: commodities, commodity-groups, commodity-subtypes, commodity-types, currencies, additives, analytics, contacts, cost-centers, delivery-formats, icoterms, sociedades, trade-operation-types
+
+ISSUE 2: Wrong sidebar link routes
+- Sidebar links point to root routes (e.g., /counterparties) instead of dashboard routes (e.g., /dashboard/counterparties)
+- This causes loss of sidebar/topbar when clicking menu items
+- Pages exist in /dashboard/ folder but sidebar doesn't link to them correctly
+
+ISSUE 3: Inconsistent layout behavior
+- /dashboard/* pages have sidebar + topbar (correct)
+- Root route pages have no sidebar/topbar (incorrect)
+- There's a duplicate contracts page in (authenticated) folder
+
+TASKS TO COMPLETE:
+
+1. UPDATE SIDEBAR NAVIGATION:
+   - Edit /frontend/src/components/layout/Sidebar.tsx
+   - Fix existing menuItems array (lines 24-31) to use /dashboard/ prefix for ALL items
+   - Add ALL missing dashboard pages to menuItems array
+   - Add proper icons for each new menu item
+   - Organize menu items logically (group related items together)
+
+2. FIX LAYOUT CONSISTENCY:
+   - Remove duplicate contracts page from /frontend/src/app/(authenticated)/contracts/
+   - Ensure all dashboard functionality uses /dashboard/* routes with proper layout
+   - Update any hardcoded links that point to root routes to use /dashboard/* instead
+   - Verify all dashboard pages have consistent sidebar + topbar
+
+3. VERIFICATION:
+   - Test that all menu items are visible in sidebar
+   - Test that all menu items link to correct /dashboard/* pages
+   - Test that sidebar + topbar appear on all dashboard pages
+   - Ensure no broken links or missing pages
+
+EXPECTED RESULT:
+- Complete sidebar navigation with all 19+ dashboard pages
+- All sidebar links point to /dashboard/* routes
+- Consistent layout (sidebar + topbar) across all dashboard pages
+- No duplicate or orphaned pages
+- Clean navigation structure
+
+Please implement these fixes systematically and verify everything works correctly.

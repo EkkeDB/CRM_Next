@@ -1,7 +1,7 @@
 {
-  "/dashboard/traders/page": "app/dashboard/traders/page.js",
-  "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
   "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
   "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
+  "/dashboard/traders/page": "app/dashboard/traders/page.js",
   "/dashboard/contacts/page": "app/dashboard/contacts/page.js"
 }
