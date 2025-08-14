@@ -10,57 +10,80 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, Edit, Trash2, Users, Mail, Phone, MapPin, Building2, Activity } from 'lucide-react'
-import { contactsApi } from '@/lib/api-client'
+import { Plus, Search, Edit, Trash2, Users, Mail, Phone, Building2, Activity, UserCheck } from 'lucide-react'
+import { contactsApi, counterpartiesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-import type { Contact } from '@/types'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
+import type { Contact, Counterparty } from '@/types'
 
-const CONTACT_STATUSES = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-  { value: 'lead', label: 'Lead' },
-]
-
-const CONTACT_SOURCES = [
-  'Website', 'Referral', 'Cold Outreach', 'Trade Show', 'LinkedIn', 'Email Campaign', 'Other'
+const DEPARTMENTS = [
+  'Sales', 'Purchasing', 'Operations', 'Finance', 'Legal', 'Management', 'Logistics', 'Quality', 'Other'
 ]
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [counterpartyFilter, setCounterpartyFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [contactToDelete, setContactToDelete] = useState<{ id: number; name: string } | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
+    counterparty: 0,
     name: '',
     email: '',
     phone: '',
-    company: '',
     position: '',
-    city: '',
-    country: '',
-    status: 'lead' as Contact['status'],
-    source: '',
-    notes: ''
+    department: '',
+    notes: '',
+    is_primary: false,
+    is_active: true,
   })
 
   useEffect(() => {
     fetchData()
   }, [])
 
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.name.trim()) {
+      errors.name = 'Name is required'
+    }
+
+    if (!formData.counterparty) {
+      errors.counterparty = 'Counterparty is required'
+    }
+
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const fetchData = async () => {
     try {
       setLoading(true)
-      const data = await contactsApi.getAll()
-      setContacts(data)
+      const [contactsRes, counterpartiesRes] = await Promise.all([
+        contactsApi.getAll(),
+        counterpartiesApi.getAll()
+      ])
+      setContacts(contactsRes.results || contactsRes)
+      setCounterparties(counterpartiesRes.results || counterpartiesRes)
     } catch (error) {
-      console.error('Error fetching contacts:', error)
+      console.error('Error fetching data:', error)
       toast({
         title: 'Error',
-        description: 'Failed to fetch contacts',
+        description: 'Failed to fetch data',
         variant: 'destructive'
       })
     } finally {
@@ -70,20 +93,23 @@ export default function ContactsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
     try {
-      setLoading(true)
+      setSubmitting(true)
+      setFormErrors({})
+
       if (editingContact) {
-        // Update existing contact
-        const updatedContact = await contactsApi.update(editingContact.id, formData)
-        setContacts(contacts.map(c => c.id === editingContact.id ? updatedContact : c))
+        await contactsApi.update(editingContact.id, formData)
         toast({
           title: 'Success',
           description: 'Contact updated successfully'
         })
       } else {
-        // Create new contact
-        const newContact = await contactsApi.create(formData)
-        setContacts([...contacts, newContact])
+        await contactsApi.create(formData)
         toast({
           title: 'Success',
           description: 'Contact created successfully'
@@ -92,103 +118,131 @@ export default function ContactsPage() {
       setDialogOpen(false)
       setEditingContact(null)
       resetForm()
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error saving contact:', error)
+      
+      // Handle specific validation errors from the backend
+      if (error.response?.status === 400 && error.response?.data) {
+        const backendErrors: Record<string, string> = {}
+        Object.keys(error.response.data).forEach(key => {
+          if (Array.isArray(error.response.data[key])) {
+            backendErrors[key] = error.response.data[key][0]
+          } else {
+            backendErrors[key] = error.response.data[key]
+          }
+        })
+        setFormErrors(backendErrors)
+      }
+      
       toast({
         title: 'Error',
-        description: 'Failed to save contact',
+        description: error.response?.data?.detail || 'Failed to save contact',
         variant: 'destructive'
       })
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
   const handleEdit = (contact: Contact) => {
     setEditingContact(contact)
     setFormData({
+      counterparty: contact.counterparty,
       name: contact.name,
-      email: contact.email,
-      phone: contact.phone,
-      company: contact.company,
-      position: contact.position,
-      city: contact.city,
-      country: contact.country,
-      status: contact.status,
-      source: contact.source,
-      notes: contact.notes
+      email: contact.email || '',
+      phone: contact.phone || '',
+      position: contact.position || '',
+      department: contact.department || '',
+      notes: contact.notes || '',
+      is_primary: contact.is_primary,
+      is_active: contact.is_active,
     })
     setDialogOpen(true)
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this contact?')) return
+  const handleDeleteClick = (id: number, name: string) => {
+    setContactToDelete({ id, name })
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!contactToDelete) return
     
     try {
-      await contactsApi.delete(id)
-      setContacts(contacts.filter(c => c.id !== id))
+      setLoading(true)
+      await contactsApi.delete(contactToDelete.id)
       toast({
         title: 'Success',
-        description: 'Contact deleted successfully'
+        description: `Contact "${contactToDelete.name}" deleted successfully`
       })
-    } catch (error) {
+      fetchData()
+    } catch (error: any) {
       console.error('Error deleting contact:', error)
       toast({
         title: 'Error',
-        description: 'Failed to delete contact',
+        description: error.response?.data?.detail || 'Failed to delete contact',
         variant: 'destructive'
       })
+    } finally {
+      setLoading(false)
+      setContactToDelete(null)
     }
   }
 
   const resetForm = () => {
     setFormData({
+      counterparty: 0,
       name: '',
       email: '',
       phone: '',
-      company: '',
       position: '',
-      city: '',
-      country: '',
-      status: 'lead',
-      source: '',
-      notes: ''
+      department: '',
+      notes: '',
+      is_primary: false,
+      is_active: true,
     })
+    setFormErrors({})
   }
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'default'
-      case 'inactive':
-        return 'secondary'
-      case 'lead':
-        return 'outline'
-      default:
-        return 'outline'
-    }
+  const getCounterpartyName = (counterpartyId: number, contact?: Contact) => {
+    const counterparty = counterparties.find(cp => cp.id === counterpartyId)
+    return counterparty?.counterparty_name || contact?.counterparty_name || 'Unknown'
   }
 
-  const getStatusStats = () => {
-    const active = contacts.filter(c => c.status === 'active').length
-    const inactive = contacts.filter(c => c.status === 'inactive').length
-    const leads = contacts.filter(c => c.status === 'lead').length
-    return { active, inactive, leads }
+  const getStatusBadgeVariant = (contact: Contact) => {
+    if (contact.is_primary && contact.is_active) return 'default'
+    if (contact.is_active) return 'secondary'
+    return 'outline'
+  }
+
+  const getStatusLabel = (contact: Contact) => {
+    if (!contact.is_active) return 'Inactive'
+    if (contact.is_primary) return 'Primary'
+    return 'Active'
   }
 
   const filteredContacts = contacts.filter(contact => {
+    const counterpartyName = getCounterpartyName(contact.counterparty, contact)
     const matchesSearch = 
       contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.position.toLowerCase().includes(searchTerm.toLowerCase())
+      counterpartyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (contact.email && contact.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (contact.position && contact.position.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (contact.department && contact.department.toLowerCase().includes(searchTerm.toLowerCase()))
 
-    const matchesStatus = statusFilter === 'all' || contact.status === statusFilter
+    const matchesCounterparty = 
+      counterpartyFilter === 'all' || 
+      contact.counterparty.toString() === counterpartyFilter
 
-    return matchesSearch && matchesStatus
+    const matchesStatus = 
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && contact.is_active) ||
+      (statusFilter === 'inactive' && !contact.is_active) ||
+      (statusFilter === 'primary' && contact.is_primary)
+
+    return matchesSearch && matchesCounterparty && matchesStatus
   })
-
-  const stats = getStatusStats()
 
   if (loading) {
     return (
@@ -205,9 +259,9 @@ export default function ContactsPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Users className="h-8 w-8 text-primary" />
-            Contact Management
+            Contacts
           </h1>
-          <p className="text-gray-600 mt-2">Manage business contacts and relationships</p>
+          <p className="text-gray-600 mt-2">Manage counterparty contacts and relationships</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -227,6 +281,28 @@ export default function ContactsPage() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="counterparty">Counterparty *</Label>
+                <Select 
+                  value={formData.counterparty.toString()} 
+                  onValueChange={(value) => setFormData({ ...formData, counterparty: parseInt(value) })}
+                >
+                  <SelectTrigger className={formErrors.counterparty ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Select counterparty" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {counterparties.map(counterparty => (
+                      <SelectItem key={counterparty.id} value={counterparty.id.toString()}>
+                        {counterparty.counterparty_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formErrors.counterparty && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.counterparty}</p>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="name">Full Name *</Label>
@@ -236,18 +312,25 @@ export default function ContactsPage() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                     placeholder="John Doe"
+                    className={formErrors.name ? 'border-red-500' : ''}
                   />
+                  {formErrors.name && (
+                    <p className="text-sm text-red-500 mt-1">{formErrors.name}</p>
+                  )}
                 </div>
                 <div>
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    required
                     placeholder="john@company.com"
+                    className={formErrors.email ? 'border-red-500' : ''}
                   />
+                  {formErrors.email && (
+                    <p className="text-sm text-red-500 mt-1">{formErrors.email}</p>
+                  )}
                 </div>
               </div>
 
@@ -262,31 +345,6 @@ export default function ContactsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={formData.status} onValueChange={(value: Contact['status']) => setFormData({ ...formData, status: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CONTACT_STATUSES.map(status => (
-                        <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="company">Company</Label>
-                  <Input
-                    id="company"
-                    value={formData.company}
-                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                    placeholder="Company Name"
-                  />
-                </div>
-                <div>
                   <Label htmlFor="position">Position</Label>
                   <Input
                     id="position"
@@ -297,36 +355,15 @@ export default function ContactsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    placeholder="City name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
-                    value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    placeholder="Country name"
-                  />
-                </div>
-              </div>
-
               <div>
-                <Label htmlFor="source">Source</Label>
-                <Select value={formData.source} onValueChange={(value) => setFormData({ ...formData, source: value })}>
+                <Label htmlFor="department">Department</Label>
+                <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="How did you find this contact?" />
+                    <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CONTACT_SOURCES.map(source => (
-                      <SelectItem key={source} value={source}>{source}</SelectItem>
+                    {DEPARTMENTS.map(dept => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -342,12 +379,47 @@ export default function ContactsPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="is_primary"
+                    checked={formData.is_primary}
+                    onChange={(e) => setFormData({ ...formData, is_primary: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Label htmlFor="is_primary" className="text-sm font-normal">
+                    Primary contact for this counterparty
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="is_active"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    className="rounded"
+                  />
+                  <Label htmlFor="is_active" className="text-sm font-normal">
+                    Active contact
+                  </Label>
+                </div>
+              </div>
+
               <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-green-600 hover:bg-green-700">
-                  {editingContact ? 'Update Contact' : 'Create Contact'}
+                <Button type="submit" className="bg-green-600 hover:bg-green-700" disabled={submitting}>
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      {editingContact ? 'Updating...' : 'Creating...'}
+                    </div>
+                  ) : (
+                    editingContact ? 'Update Contact' : 'Create Contact'
+                  )}
                 </Button>
               </div>
             </form>
@@ -374,7 +446,7 @@ export default function ContactsPage() {
               <Activity className="h-8 w-8 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Contacts</p>
-                <p className="text-2xl font-bold">{stats.active}</p>
+                <p className="text-2xl font-bold">{contacts.filter(c => c.is_active).length}</p>
               </div>
             </div>
           </CardContent>
@@ -382,10 +454,10 @@ export default function ContactsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
-              <Users className="h-8 w-8 text-orange-600" />
+              <UserCheck className="h-8 w-8 text-orange-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Leads</p>
-                <p className="text-2xl font-bold">{stats.leads}</p>
+                <p className="text-sm font-medium text-muted-foreground">Primary Contacts</p>
+                <p className="text-2xl font-bold">{contacts.filter(c => c.is_primary).length}</p>
               </div>
             </div>
           </CardContent>
@@ -395,8 +467,8 @@ export default function ContactsPage() {
             <div className="flex items-center space-x-2">
               <Building2 className="h-8 w-8 text-purple-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Companies</p>
-                <p className="text-2xl font-bold">{new Set(contacts.map(c => c.company)).size}</p>
+                <p className="text-sm font-medium text-muted-foreground">Counterparties</p>
+                <p className="text-2xl font-bold">{new Set(contacts.map(c => c.counterparty)).size}</p>
               </div>
             </div>
           </CardContent>
@@ -419,15 +491,28 @@ export default function ContactsPage() {
                 className="max-w-sm"
               />
             </div>
+            <Select value={counterpartyFilter} onValueChange={setCounterpartyFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by counterparty" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Counterparties</SelectItem>
+                {counterparties.map(counterparty => (
+                  <SelectItem key={counterparty.id} value={counterparty.id.toString()}>
+                    {counterparty.counterparty_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                {CONTACT_STATUSES.map(status => (
-                  <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
-                ))}
+                <SelectItem value="active">Active Only</SelectItem>
+                <SelectItem value="inactive">Inactive Only</SelectItem>
+                <SelectItem value="primary">Primary Only</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -439,9 +524,12 @@ export default function ContactsPage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Contacts ({filteredContacts.length})</span>
+            <div className="text-sm text-muted-foreground">
+              {contacts.filter(c => c.is_active).length} active, {contacts.filter(c => c.is_primary).length} primary
+            </div>
           </CardTitle>
           <CardDescription>
-            Complete list of business contacts and their information
+            Complete list of counterparty contacts and their information
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -449,12 +537,10 @@ export default function ContactsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Contact</TableHead>
-                <TableHead>Company & Position</TableHead>
+                <TableHead>Counterparty</TableHead>
+                <TableHead>Position & Department</TableHead>
                 <TableHead>Contact Info</TableHead>
-                <TableHead>Location</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Last Contact</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -473,57 +559,54 @@ export default function ContactsPage() {
                     </div>
                   </TableCell>
                   <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      {getCounterpartyName(contact.counterparty, contact)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <div>
-                      <div className="font-medium flex items-center gap-1">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        {contact.company}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{contact.position}</div>
+                      {contact.position && (
+                        <div className="font-medium">{contact.position}</div>
+                      )}
+                      {contact.department && (
+                        <div className="text-sm text-muted-foreground">{contact.department}</div>
+                      )}
+                      {!contact.position && !contact.department && (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      <div className="flex items-center gap-1 text-sm">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        {contact.email}
-                      </div>
+                      {contact.email && (
+                        <div className="flex items-center gap-1 text-sm">
+                          <Mail className="h-3 w-3 text-muted-foreground" />
+                          {contact.email}
+                        </div>
+                      )}
                       {contact.phone && (
                         <div className="flex items-center gap-1 text-sm">
                           <Phone className="h-3 w-3 text-muted-foreground" />
                           {contact.phone}
                         </div>
                       )}
+                      {!contact.email && !contact.phone && (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    {contact.city || contact.country ? (
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span>
-                          {[contact.city, contact.country].filter(Boolean).join(', ')}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(contact.status)}>
-                      {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
+                    <Badge variant={getStatusBadgeVariant(contact)}>
+                      {getStatusLabel(contact)}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm">{contact.source}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm">{new Date(contact.last_contact).toLocaleDateString('en-US', { timeZone: 'UTC' })}</span>
-                  </TableCell>
-                  <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => handleEdit(contact)}>
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(contact)} disabled={loading}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDelete(contact.id)}>
+                      <Button variant="outline" size="sm" onClick={() => handleDeleteClick(contact.id, contact.name)} disabled={loading}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -542,17 +625,22 @@ export default function ContactsPage() {
         </CardContent>
       </Card>
 
-      {/* Note */}
-      <Card className="mt-6">
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Users className="h-4 w-4" />
-            <span>
-              Contact data is managed through the database with full CRUD operations. All contact information is now persistent.
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Contact"
+        description={
+          contactToDelete
+            ? `Are you sure you want to delete "${contactToDelete.name}"? This action cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setContactToDelete(null)}
+      />
     </div>
   )
 }

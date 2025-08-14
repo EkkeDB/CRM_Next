@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Layers, Package2, TrendingUp, BarChart3 } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { referenceDataApi, commodityGroupsApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { CommodityGroup } from '@/types'
 
@@ -33,8 +33,8 @@ export default function CommodityGroupsPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const data = await referenceDataApi.getCommodityGroups()
-      setCommodityGroups(data)
+      const data = await commodityGroupsApi.getAll()
+      setCommodityGroups(data.results || data)
     } catch (error) {
       console.error('Error fetching commodity groups:', error)
       toast({
@@ -50,13 +50,26 @@ export default function CommodityGroupsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for commodity group CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Commodity group create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
+      if (editingGroup) {
+        // Update existing commodity group
+        await commodityGroupsApi.update(editingGroup.id, formData)
+        toast({
+          title: 'Success',
+          description: 'Commodity group updated successfully',
+          variant: 'default'
+        })
+      } else {
+        // Create new commodity group
+        await commodityGroupsApi.create(formData)
+        toast({
+          title: 'Success',
+          description: 'Commodity group created successfully',
+          variant: 'default'
+        })
+      }
       
+      // Refresh the list
+      await fetchData()
       setDialogOpen(false)
       setEditingGroup(null)
       resetForm()
@@ -83,11 +96,14 @@ export default function CommodityGroupsPage() {
     if (!confirm('Are you sure you want to delete this commodity group?')) return
     
     try {
+      await commodityGroupsApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'Commodity group delete API endpoint not yet implemented',
+        title: 'Success',
+        description: 'Commodity group deleted successfully',
         variant: 'default'
       })
+      // Refresh the list
+      await fetchData()
     } catch (error) {
       console.error('Error deleting commodity group:', error)
       toast({
@@ -303,8 +319,6 @@ export default function CommodityGroupsPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(group.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -330,7 +344,7 @@ export default function CommodityGroupsPage() {
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Layers className="h-4 w-4" />
             <span>
-              Commodity group data is loaded from the database. Create/Update/Delete operations require API implementation.
+              Commodity group data is loaded from the database. Full CRUD operations are available.
             </span>
           </div>
         </CardContent>

@@ -11,19 +11,16 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Eye, Trash2, Building, Users, MapPin, Mail, Phone } from 'lucide-react'
-import { counterpartiesApi } from '@/lib/api-client'
+import { counterpartiesApi, referenceDataApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import type { Counterparty } from '@/types'
 
-const COUNTERPARTY_TYPES = [
-  { value: 'customer', label: 'Customer Only' },
-  { value: 'supplier', label: 'Supplier Only' },
-  { value: 'both', label: 'Customer & Supplier' },
-]
+// Remove the COUNTERPARTY_TYPES constant as we're using commodity types now
 
 export default function CounterpartiesPage() {
   const [counterparties, setCounterparties] = useState<Counterparty[]>([])
+  const [commodityTypes, setCommodityTypes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -44,8 +41,8 @@ export default function CounterpartiesPage() {
     phone: '',
     email: '',
     contact_person: '',
-    is_supplier: false,
-    is_customer: true,
+    commodity_types: [] as number[],
+    is_active: true,
   })
 
   useEffect(() => {
@@ -63,10 +60,6 @@ export default function CounterpartiesPage() {
       errors.email = 'Please enter a valid email address'
     }
 
-    if (!formData.is_customer && !formData.is_supplier) {
-      errors.type = 'Please select at least one type (Customer or Supplier)'
-    }
-
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -74,13 +67,17 @@ export default function CounterpartiesPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const response = await counterpartiesApi.getAll()
-      setCounterparties(response.results || response)
+      const [counterpartiesRes, commodityTypesRes] = await Promise.all([
+        counterpartiesApi.getAll(),
+        referenceDataApi.getCommodityTypes()
+      ])
+      setCounterparties(counterpartiesRes.results || counterpartiesRes)
+      setCommodityTypes(commodityTypesRes)
     } catch (error) {
-      console.error('Error fetching counterparties:', error)
+      console.error('Error fetching data:', error)
       toast({
         title: 'Error',
-        description: 'Failed to fetch counterparties',
+        description: 'Failed to fetch data',
         variant: 'destructive'
       })
     } finally {
@@ -153,8 +150,8 @@ export default function CounterpartiesPage() {
       phone: counterparty.phone || '',
       email: counterparty.email || '',
       contact_person: counterparty.contact_person || '',
-      is_supplier: counterparty.is_supplier,
-      is_customer: counterparty.is_customer,
+      commodity_types: counterparty.commodity_types || [],
+      is_active: counterparty.is_active,
     })
     setDialogOpen(true)
   }
@@ -198,38 +195,30 @@ export default function CounterpartiesPage() {
       phone: '',
       email: '',
       contact_person: '',
-      is_supplier: false,
-      is_customer: true,
+      commodity_types: [] as number[],
+      is_active: true,
     })
     setFormErrors({})
   }
 
-  const handleTypeChange = (value: string) => {
-    switch (value) {
-      case 'customer':
-        setFormData({ ...formData, is_customer: true, is_supplier: false })
-        break
-      case 'supplier':
-        setFormData({ ...formData, is_customer: false, is_supplier: true })
-        break
-      case 'both':
-        setFormData({ ...formData, is_customer: true, is_supplier: true })
-        break
+  const handleCommodityTypesChange = (selectedTypes: string[]) => {
+    const typeIds = selectedTypes.map(typeId => parseInt(typeId))
+    setFormData({ ...formData, commodity_types: typeIds })
+  }
+
+  const getCommodityTypesDisplay = (counterparty: Counterparty) => {
+    if (!counterparty.commodity_type_names || counterparty.commodity_type_names.length === 0) {
+      return 'No types'
     }
+    return counterparty.commodity_type_names.join(', ')
   }
 
-  const getCounterpartyType = (counterparty: Counterparty) => {
-    if (counterparty.is_customer && counterparty.is_supplier) return 'Both'
-    if (counterparty.is_customer) return 'Customer'
-    if (counterparty.is_supplier) return 'Supplier'
-    return 'Unknown'
+  const getActiveStatus = (counterparty: Counterparty) => {
+    return counterparty.is_active ? 'Active' : 'Inactive'
   }
 
-  const getTypeBadgeVariant = (counterparty: Counterparty) => {
-    if (counterparty.is_customer && counterparty.is_supplier) return 'default'
-    if (counterparty.is_customer) return 'secondary'
-    if (counterparty.is_supplier) return 'outline'
-    return 'destructive'
+  const getActiveStatusVariant = (counterparty: Counterparty) => {
+    return counterparty.is_active ? 'default' : 'secondary'
   }
 
   const filteredCounterparties = counterparties.filter(counterparty => {
@@ -241,9 +230,10 @@ export default function CounterpartiesPage() {
 
     const matchesFilter = 
       filterType === 'all' ||
-      (filterType === 'customer' && counterparty.is_customer) ||
-      (filterType === 'supplier' && counterparty.is_supplier) ||
-      (filterType === 'both' && counterparty.is_customer && counterparty.is_supplier)
+      (filterType === 'active' && counterparty.is_active) ||
+      (filterType === 'inactive' && !counterparty.is_active) ||
+      (commodityTypes.some(ct => ct.id.toString() === filterType) && 
+       counterparty.commodity_types && counterparty.commodity_types.includes(parseInt(filterType)))
 
     return matchesSearch && matchesFilter
   })
@@ -327,27 +317,54 @@ export default function CounterpartiesPage() {
               </div>
 
               <div>
-                <Label htmlFor="type">Counterparty Type</Label>
-                <Select 
-                  value={
-                    formData.is_customer && formData.is_supplier ? 'both' :
-                    formData.is_customer ? 'customer' : 
-                    formData.is_supplier ? 'supplier' : 'customer'
-                  } 
-                  onValueChange={handleTypeChange}
-                >
-                  <SelectTrigger className={formErrors.type ? 'border-red-500' : ''}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COUNTERPARTY_TYPES.map(type => (
-                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formErrors.type && (
-                  <p className="text-sm text-red-500 mt-1">{formErrors.type}</p>
+                <Label htmlFor="commodity_types">Commodity Types</Label>
+                <div className="space-y-2">
+                  {commodityTypes.map(type => (
+                    <div key={type.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`commodity_type_${type.id}`}
+                        checked={formData.commodity_types.includes(type.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({ 
+                              ...formData, 
+                              commodity_types: [...formData.commodity_types, type.id] 
+                            })
+                          } else {
+                            setFormData({ 
+                              ...formData, 
+                              commodity_types: formData.commodity_types.filter(id => id !== type.id) 
+                            })
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <Label htmlFor={`commodity_type_${type.id}`} className="text-sm font-normal">
+                        {type.commodity_type_name}
+                      </Label>
+                    </div>
+                  ))}
+                  {commodityTypes.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Loading commodity types...</p>
+                  )}
+                </div>
+                {formErrors.commodity_types && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.commodity_types}</p>
                 )}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                  className="rounded"
+                />
+                <Label htmlFor="is_active" className="text-sm font-normal">
+                  Active counterparty
+                </Label>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -450,10 +467,14 @@ export default function CounterpartiesPage() {
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="customer">Customers Only</SelectItem>
-                <SelectItem value="supplier">Suppliers Only</SelectItem>
-                <SelectItem value="both">Customer & Supplier</SelectItem>
+                <SelectItem value="all">All Counterparties</SelectItem>
+                <SelectItem value="active">Active Only</SelectItem>
+                <SelectItem value="inactive">Inactive Only</SelectItem>
+                {commodityTypes.map(type => (
+                  <SelectItem key={type.id} value={type.id.toString()}>
+                    {type.commodity_type_name} Only
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -466,7 +487,7 @@ export default function CounterpartiesPage() {
           <CardTitle className="flex items-center justify-between">
             <span>Counterparties ({filteredCounterparties.length})</span>
             <div className="text-sm text-muted-foreground">
-              {counterparties.filter(cp => cp.is_customer).length} customers, {counterparties.filter(cp => cp.is_supplier).length} suppliers
+              {counterparties.filter(cp => cp.is_active).length} active, {counterparties.filter(cp => !cp.is_active).length} inactive
             </div>
           </CardTitle>
           <CardDescription>
@@ -478,7 +499,8 @@ export default function CounterpartiesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Company</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>Commodity Types</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Contact Info</TableHead>
@@ -504,8 +526,13 @@ export default function CounterpartiesPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getTypeBadgeVariant(counterparty)}>
-                      {getCounterpartyType(counterparty)}
+                    <div className="text-sm">
+                      {getCommodityTypesDisplay(counterparty)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getActiveStatusVariant(counterparty)}>
+                      {getActiveStatus(counterparty)}
                     </Badge>
                   </TableCell>
                   <TableCell>

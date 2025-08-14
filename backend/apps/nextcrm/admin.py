@@ -5,7 +5,7 @@ Django admin configuration for NextCRM models.
 from django.contrib import admin
 from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
-    Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
+    Commodity_Subtype, Commodity, Counterparty, Contact, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
     Contract, Counterparty_Facility, Trade_Setting
 )
@@ -39,16 +39,15 @@ class CommodityGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Commodity_Type)
 class CommodityTypeAdmin(admin.ModelAdmin):
-    list_display = ('commodity_type_name', 'commodity_group', 'description')
-    list_filter = ('commodity_group',)
-    search_fields = ('commodity_type_name', 'commodity_group__commodity_group_name')
-    ordering = ('commodity_group__commodity_group_name', 'commodity_type_name')
+    list_display = ('commodity_type_name', 'description')
+    search_fields = ('commodity_type_name',)
+    ordering = ('commodity_type_name',)
 
 
 @admin.register(Commodity_Subtype)
 class CommoditySubtypeAdmin(admin.ModelAdmin):
     list_display = ('commodity_subtype_name', 'commodity_type', 'description')
-    list_filter = ('commodity_type', 'commodity_type__commodity_group')
+    list_filter = ('commodity_type',)
     search_fields = ('commodity_subtype_name', 'commodity_type__commodity_type_name')
     ordering = ('commodity_type__commodity_type_name', 'commodity_subtype_name')
 
@@ -56,7 +55,7 @@ class CommoditySubtypeAdmin(admin.ModelAdmin):
 @admin.register(Commodity)
 class CommodityAdmin(admin.ModelAdmin):
     list_display = ('commodity_name_short', 'commodity_name_full', 'commodity_subtype', 'unit_of_measure')
-    list_filter = ('commodity_subtype', 'commodity_subtype__commodity_type', 'commodity_subtype__commodity_type__commodity_group')
+    list_filter = ('commodity_subtype', 'commodity_subtype__commodity_type')
     search_fields = ('commodity_name_short', 'commodity_name_full')
     ordering = ('commodity_name_short',)
 
@@ -68,11 +67,21 @@ class CounterpartyFacilityInline(admin.TabularInline):
 
 @admin.register(Counterparty)
 class CounterpartyAdmin(admin.ModelAdmin):
-    list_display = ('counterparty_name', 'counterparty_code', 'city', 'country', 'is_supplier', 'is_customer')
-    list_filter = ('is_supplier', 'is_customer', 'country')
+    list_display = ('counterparty_name', 'counterparty_code', 'city', 'country', 'is_active')
+    list_filter = ('is_active', 'country', 'commodity_types')
     search_fields = ('counterparty_name', 'counterparty_code', 'email')
     ordering = ('counterparty_name',)
+    filter_horizontal = ('commodity_types',)  # For many-to-many field
     inlines = [CounterpartyFacilityInline]
+
+
+@admin.register(Contact)
+class ContactAdmin(admin.ModelAdmin):
+    list_display = ('name', 'counterparty', 'email', 'phone', 'position', 'is_primary', 'is_active')
+    list_filter = ('is_primary', 'is_active', 'department', 'counterparty')
+    search_fields = ('name', 'email', 'counterparty__counterparty_name', 'position')
+    ordering = ('counterparty__counterparty_name', 'name')
+    raw_id_fields = ('counterparty',)
 
 
 @admin.register(Broker)
@@ -124,7 +133,7 @@ class ContractAdmin(admin.ModelAdmin):
         'price', 'status', 'date', 'trader'
     )
     list_filter = (
-        'status', 'date', 'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type__commodity_group',
+        'status', 'date', 'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type',
         'trade_operation_type'
     )
     search_fields = (

@@ -25,7 +25,8 @@ import {
   MapPin,
   Shield,
   Briefcase,
-  BarChart3
+  BarChart3,
+  Factory
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -38,6 +39,7 @@ const menuItems = [
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/dashboard/contracts', label: 'Contracts', icon: FileText },
   { href: '/dashboard/counterparties', label: 'Counterparties', icon: Building },
+  { href: '/dashboard/counterparty-facilities', label: 'Counterparty Facilities', icon: Factory },
   { href: '/dashboard/traders', label: 'Traders', icon: Users },
   { href: '/dashboard/contacts', label: 'Contacts', icon: UserCheck },
   { href: '/dashboard/commodities', label: 'Commodities', icon: Package },

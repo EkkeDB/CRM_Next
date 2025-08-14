@@ -93,9 +93,7 @@ export interface CommodityGroup {
 export interface CommodityType {
   id: number
   commodity_type_name: string
-  commodity_group: number
   description: string
-  commodity_group_name?: string
 }
 
 export interface CommoditySubtype {
@@ -104,7 +102,6 @@ export interface CommoditySubtype {
   commodity_type: number
   description: string
   commodity_type_name?: string
-  commodity_group_name?: string
 }
 
 export interface Commodity {
@@ -115,7 +112,6 @@ export interface Commodity {
   unit_of_measure: string
   commodity_subtype_name?: string
   commodity_type_name?: string
-  commodity_group_name?: string
 }
 
 export interface CounterpartyFacility {
@@ -141,9 +137,13 @@ export interface Counterparty {
   phone: string
   email: string
   contact_person: string
-  is_supplier: boolean
-  is_customer: boolean
+  is_active: boolean
+  commodity_types: number[]
+  commodity_type_names?: string[]
   facilities?: CounterpartyFacility[]
+  contacts?: Contact[]
+  created_at: string
+  updated_at: string
 }
 
 export interface Broker {
@@ -194,18 +194,18 @@ export interface TradeOperationType {
 
 export interface Contact {
   id: number
+  counterparty: number
+  counterparty_name?: string
   name: string
   email: string
   phone: string
-  company: string
   position: string
-  city: string
-  country: string
-  status: 'active' | 'inactive' | 'lead'
-  source: string
+  department: string
   notes: string
+  is_primary: boolean
+  is_active: boolean
   created_at: string
-  last_contact: string
+  updated_at: string
 }
 
 export interface Contract {
@@ -242,7 +242,6 @@ export interface Contract {
   trader_name?: string
   counterparty_name?: string
   commodity_name?: string
-  commodity_group_name?: string
   commodity_type_name?: string
   commodity_subtype_name?: string
   broker_name?: string

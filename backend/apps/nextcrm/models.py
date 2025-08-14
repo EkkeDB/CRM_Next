@@ -75,7 +75,6 @@ class Commodity_Group(models.Model):
 
 class Commodity_Type(models.Model):
     commodity_type_name = models.CharField(max_length=50)
-    commodity_group = models.ForeignKey(Commodity_Group, on_delete=models.CASCADE, related_name='commodity_types')
     description = models.TextField(blank=True)
     
     # Audit fields
@@ -88,7 +87,7 @@ class Commodity_Type(models.Model):
         verbose_name_plural = 'Commodity Types'
 
     def __str__(self):
-        return f"{self.commodity_type_name} ({self.commodity_group.commodity_group_name})"
+        return self.commodity_type_name
 
 
 class Commodity_Subtype(models.Model):
@@ -127,14 +126,9 @@ class Commodity(models.Model):
     def commodity_type(self):
         """Get the commodity type through the subtype"""
         return self.commodity_subtype.commodity_type
-    
-    @property
-    def commodity_group(self):
-        """Get the commodity group through the type"""
-        return self.commodity_subtype.commodity_type.commodity_group
 
     def __str__(self):
-        return f"{self.commodity_name_short} - {self.commodity_group.commodity_group_name}"
+        return f"{self.commodity_name_short} - {self.commodity_type.commodity_type_name}"
 
 
 class Counterparty(models.Model):
@@ -146,8 +140,10 @@ class Counterparty(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     contact_person = models.CharField(max_length=100, blank=True)
-    is_supplier = models.BooleanField(default=False)
-    is_customer = models.BooleanField(default=True)
+    
+    # New fields - commodity types for filtering customers
+    commodity_types = models.ManyToManyField(Commodity_Type, blank=True, related_name='counterparties')
+    is_active = models.BooleanField(default=True)
     
     # Audit fields
     created_at = models.DateTimeField(auto_now_add=True)
@@ -156,12 +152,6 @@ class Counterparty(models.Model):
     class Meta:
         db_table = 'counterparties'
         verbose_name_plural = 'Counterparties'
-        constraints = [
-            models.CheckConstraint(
-                check=models.Q(is_customer=True) | models.Q(is_supplier=True),
-                name='counterparty_must_be_customer_or_supplier'
-            ),
-        ]
 
     def clean(self):
         """Model validation"""
@@ -171,10 +161,6 @@ class Counterparty(models.Model):
         # Validate that counterparty name is not empty
         if not self.counterparty_name or not self.counterparty_name.strip():
             errors['counterparty_name'] = 'Company name cannot be empty'
-        
-        # Validate that at least one type is selected
-        if not self.is_customer and not self.is_supplier:
-            errors['__all__'] = 'Counterparty must be either a customer, supplier, or both'
         
         # Validate email format if provided
         if self.email:
@@ -205,6 +191,66 @@ class Counterparty(models.Model):
 
     def __str__(self):
         return self.counterparty_name
+
+
+class Contact(models.Model):
+    """Contact persons linked to counterparties"""
+    counterparty = models.ForeignKey(Counterparty, on_delete=models.CASCADE, related_name='contacts')
+    name = models.CharField(max_length=100)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    position = models.CharField(max_length=100, blank=True)  # Job title/position
+    department = models.CharField(max_length=50, blank=True)
+    notes = models.TextField(blank=True)
+    is_primary = models.BooleanField(default=False)  # Primary contact for this counterparty
+    is_active = models.BooleanField(default=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'contacts'
+        verbose_name_plural = 'Contacts'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['counterparty', 'is_primary'],
+                condition=models.Q(is_primary=True),
+                name='unique_primary_contact_per_counterparty'
+            ),
+        ]
+
+    def clean(self):
+        """Model validation"""
+        from django.core.exceptions import ValidationError
+        errors = {}
+        
+        # Validate that contact name is not empty
+        if not self.name or not self.name.strip():
+            errors['name'] = 'Contact name cannot be empty'
+        
+        # Validate email format if provided
+        if self.email:
+            import re
+            email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+            if not re.match(email_pattern, self.email):
+                errors['email'] = 'Please enter a valid email address'
+        
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        """Override save to perform validation and cleanup"""
+        # Clean up fields
+        if self.name:
+            self.name = self.name.strip()
+        
+        # Call clean method for validation
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} ({self.counterparty.counterparty_name})"
 
 
 class Broker(models.Model):
@@ -395,11 +441,6 @@ class Contract(models.Model):
             self.contract_number = f"CONT-{year}-{new_number:06d}"
         
         super().save(*args, **kwargs)
-    
-    @property
-    def commodity_group(self):
-        """Get the commodity group through the commodity hierarchy"""
-        return self.commodity.commodity_group
     
     @property
     def commodity_type(self):

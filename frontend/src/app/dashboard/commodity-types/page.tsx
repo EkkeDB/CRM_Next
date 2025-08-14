@@ -11,13 +11,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Package, Layers, TrendingUp } from 'lucide-react'
-import { referenceDataApi } from '@/lib/api-client'
+import { commodityTypesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
-import type { CommodityType, CommodityGroup } from '@/types'
+import type { CommodityType } from '@/types'
 
 export default function CommodityTypesPage() {
   const [commodityTypes, setCommodityTypes] = useState<CommodityType[]>([])
-  const [commodityGroups, setCommodityGroups] = useState<CommodityGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -26,7 +25,6 @@ export default function CommodityTypesPage() {
 
   const [formData, setFormData] = useState({
     commodity_type_name: '',
-    commodity_group: '',
     description: ''
   })
 
@@ -37,12 +35,8 @@ export default function CommodityTypesPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [typesData, groupsData] = await Promise.all([
-        referenceDataApi.getCommodityTypes(),
-        referenceDataApi.getCommodityGroups()
-      ])
-      setCommodityTypes(typesData)
-      setCommodityGroups(groupsData)
+      const typesData = await commodityTypesApi.getAll()
+      setCommodityTypes(typesData.results || typesData)
     } catch (error) {
       console.error('Error fetching commodity types:', error)
       toast({
@@ -58,13 +52,31 @@ export default function CommodityTypesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for commodity type CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Commodity type create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
+      const requestData = {
+        commodity_type_name: formData.commodity_type_name,
+        description: formData.description
+      }
+
+      if (editingType) {
+        // Update existing commodity type
+        await commodityTypesApi.update(editingType.id, requestData)
+        toast({
+          title: 'Success',
+          description: 'Commodity type updated successfully',
+          variant: 'default'
+        })
+      } else {
+        // Create new commodity type
+        await commodityTypesApi.create(requestData)
+        toast({
+          title: 'Success',
+          description: 'Commodity type created successfully',
+          variant: 'default'
+        })
+      }
       
+      // Refresh the list
+      await fetchData()
       setDialogOpen(false)
       setEditingType(null)
       resetForm()
@@ -82,7 +94,6 @@ export default function CommodityTypesPage() {
     setEditingType(type)
     setFormData({
       commodity_type_name: type.commodity_type_name,
-      commodity_group: type.commodity_group.toString(),
       description: type.description
     })
     setDialogOpen(true)
@@ -92,11 +103,14 @@ export default function CommodityTypesPage() {
     if (!confirm('Are you sure you want to delete this commodity type?')) return
     
     try {
+      await commodityTypesApi.delete(id)
       toast({
-        title: 'Info',
-        description: 'Commodity type delete API endpoint not yet implemented',
+        title: 'Success',
+        description: 'Commodity type deleted successfully',
         variant: 'default'
       })
+      // Refresh the list
+      await fetchData()
     } catch (error) {
       console.error('Error deleting commodity type:', error)
       toast({
@@ -110,15 +124,13 @@ export default function CommodityTypesPage() {
   const resetForm = () => {
     setFormData({
       commodity_type_name: '',
-      commodity_group: '',
       description: ''
     })
   }
 
   const filteredTypes = commodityTypes.filter(type =>
     type.commodity_type_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    type.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (type.commodity_group_name && type.commodity_group_name.toLowerCase().includes(searchTerm.toLowerCase()))
+    type.description.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
@@ -169,19 +181,6 @@ export default function CommodityTypesPage() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="commodity_group">Commodity Group *</Label>
-                <Select value={formData.commodity_group} onValueChange={(value) => setFormData({ ...formData, commodity_group: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {commodityGroups.map(group => (
-                      <SelectItem key={group.id} value={group.id.toString()}>{group.commodity_group_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
               <div>
                 <Label htmlFor="description">Description</Label>
@@ -224,8 +223,8 @@ export default function CommodityTypesPage() {
             <div className="flex items-center space-x-2">
               <Layers className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Groups</p>
-                <p className="text-2xl font-bold">{commodityGroups.length}</p>
+                <p className="text-sm font-medium text-muted-foreground">Independent</p>
+                <p className="text-2xl font-bold">Yes</p>
               </div>
             </div>
           </CardContent>
@@ -281,7 +280,7 @@ export default function CommodityTypesPage() {
             <span>Commodity Types ({filteredTypes.length})</span>
           </CardTitle>
           <CardDescription>
-            Manage commodity type classifications within groups
+            Manage independent commodity type classifications
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -289,7 +288,6 @@ export default function CommodityTypesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Type Name</TableHead>
-                <TableHead>Commodity Group</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
@@ -307,9 +305,6 @@ export default function CommodityTypesPage() {
                         <div className="font-medium">{type.commodity_type_name}</div>
                       </div>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{type.commodity_group_name || 'N/A'}</Badge>
                   </TableCell>
                   <TableCell>
                     <div className="max-w-xs">
@@ -330,8 +325,6 @@ export default function CommodityTypesPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(type.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -357,7 +350,7 @@ export default function CommodityTypesPage() {
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Package className="h-4 w-4" />
             <span>
-              Commodity type data is loaded from the database with proper hierarchy linking to commodity groups. Create/Update/Delete operations require API implementation.
+              Commodity type data is loaded from the database as independent entities. Full CRUD operations are available.
             </span>
           </div>
         </CardContent>

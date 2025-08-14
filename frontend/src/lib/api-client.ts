@@ -25,9 +25,6 @@ const apiClient: AxiosInstance = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   timeout: 30000,
   withCredentials: true, // Important for HttpOnly cookies
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
 
 // CSRF token management with enhanced error handling and race condition prevention
@@ -157,6 +154,11 @@ const clearAuthState = (): void => {
 // Request interceptor with enhanced error handling
 apiClient.interceptors.request.use(
   async (config) => {
+    // Add Content-Type header only for requests with a body to avoid unnecessary preflights
+    if (['post', 'put', 'patch'].includes((config.method || '').toLowerCase())) {
+      config.headers['Content-Type'] = 'application/json'
+    }
+    
     // Add CSRF token for non-GET requests that require it
     const isCSRFEndpoint = config.url?.includes('/auth/csrf')
     const isHealthEndpoint = config.url?.includes('/auth/health')
@@ -433,9 +435,9 @@ export const counterpartiesApi = {
     page?: number
     page_size?: number
     search?: string
-    is_supplier?: boolean
-    is_customer?: boolean
+    is_active?: boolean
     country?: string
+    commodity_types?: number
   }): Promise<PaginatedResponse<Counterparty>> => {
     const response = await apiClient.get('/counterparties/', { params })
     return response.data
@@ -446,7 +448,7 @@ export const counterpartiesApi = {
     return response.data
   },
 
-  create: async (data: Omit<Counterparty, 'id' | 'facilities'>): Promise<Counterparty> => {
+  create: async (data: Omit<Counterparty, 'id' | 'facilities' | 'contacts' | 'commodity_type_names'>): Promise<Counterparty> => {
     const response = await apiClient.post('/counterparties/', data)
     return response.data
   },
@@ -493,29 +495,160 @@ export const commoditiesApi = {
   },
 }
 
+// Counterparty Facilities API
+export const counterpartyFacilitiesApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+    counterparty?: number
+    facility_type?: string
+    is_active?: boolean
+    country?: string
+  }): Promise<PaginatedResponse<any>> => {
+    const response = await apiClient.get('/counterparty-facilities/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await apiClient.get(`/counterparty-facilities/${id}/`)
+    return response.data
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await apiClient.post('/counterparty-facilities/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await apiClient.put(`/counterparty-facilities/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/counterparty-facilities/${id}/`)
+  },
+}
+
+// Commodity Groups API
+export const commodityGroupsApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<CommodityGroup>> => {
+    const response = await apiClient.get('/commodity-groups/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<CommodityGroup> => {
+    const response = await apiClient.get(`/commodity-groups/${id}/`)
+    return response.data
+  },
+
+  create: async (data: Omit<CommodityGroup, 'id'>): Promise<CommodityGroup> => {
+    const response = await apiClient.post('/commodity-groups/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<CommodityGroup>): Promise<CommodityGroup> => {
+    const response = await apiClient.put(`/commodity-groups/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/commodity-groups/${id}/`)
+  }
+}
+
+// Commodity Types API
+export const commodityTypesApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<CommodityType>> => {
+    const response = await apiClient.get('/commodity-types/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<CommodityType> => {
+    const response = await apiClient.get(`/commodity-types/${id}/`)
+    return response.data
+  },
+
+  create: async (data: Omit<CommodityType, 'id'>): Promise<CommodityType> => {
+    const response = await apiClient.post('/commodity-types/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<CommodityType>): Promise<CommodityType> => {
+    const response = await apiClient.put(`/commodity-types/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/commodity-types/${id}/`)
+  }
+}
+
+// Commodity Subtypes API
+export const commoditySubtypesApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+  }): Promise<PaginatedResponse<CommoditySubtype>> => {
+    const response = await apiClient.get('/commodity-subtypes/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<CommoditySubtype> => {
+    const response = await apiClient.get(`/commodity-subtypes/${id}/`)
+    return response.data
+  },
+
+  create: async (data: Omit<CommoditySubtype, 'id' | 'commodity_type_name'>): Promise<CommoditySubtype> => {
+    const response = await apiClient.post('/commodity-subtypes/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<CommoditySubtype>): Promise<CommoditySubtype> => {
+    const response = await apiClient.put(`/commodity-subtypes/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/commodity-subtypes/${id}/`)
+  }
+}
+
 // Contacts API
 export const contactsApi = {
   getAll: async (params?: {
     page?: number
     page_size?: number
     search?: string
-    status?: string
-  }): Promise<Contact[]> => {
+    counterparty?: number
+    is_active?: boolean
+    is_primary?: boolean
+    department?: string
+  }): Promise<PaginatedResponse<any>> => {
     const response = await apiClient.get('/contacts/', { params })
-    return response.data.results || response.data
+    return response.data
   },
 
-  getById: async (id: number): Promise<Contact> => {
+  getById: async (id: number): Promise<any> => {
     const response = await apiClient.get(`/contacts/${id}/`)
     return response.data
   },
 
-  create: async (data: Omit<Contact, 'id' | 'created_at' | 'last_contact'>): Promise<Contact> => {
+  create: async (data: any): Promise<any> => {
     const response = await apiClient.post('/contacts/', data)
     return response.data
   },
 
-  update: async (id: number, data: Partial<Contact>): Promise<Contact> => {
+  update: async (id: number, data: any): Promise<any> => {
     const response = await apiClient.put(`/contacts/${id}/`, data)
     return response.data
   },

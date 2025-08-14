@@ -6,7 +6,7 @@ import json
 from rest_framework import serializers
 from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
-    Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
+    Commodity_Subtype, Commodity, Counterparty, Contact, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
     Contract, Counterparty_Facility, Trade_Setting
 )
@@ -37,8 +37,6 @@ class CommodityGroupSerializer(serializers.ModelSerializer):
 
 
 class CommodityTypeSerializer(serializers.ModelSerializer):
-    commodity_group_name = serializers.CharField(source='commodity_group.commodity_group_name', read_only=True)
-    
     class Meta:
         model = Commodity_Type
         fields = '__all__'
@@ -46,7 +44,6 @@ class CommodityTypeSerializer(serializers.ModelSerializer):
 
 class CommoditySubtypeSerializer(serializers.ModelSerializer):
     commodity_type_name = serializers.CharField(source='commodity_type.commodity_type_name', read_only=True)
-    commodity_group_name = serializers.CharField(source='commodity_type.commodity_group.commodity_group_name', read_only=True)
     
     class Meta:
         model = Commodity_Subtype
@@ -54,7 +51,6 @@ class CommoditySubtypeSerializer(serializers.ModelSerializer):
 
 
 class CommoditySerializer(serializers.ModelSerializer):
-    commodity_group_name = serializers.CharField(source='commodity_subtype.commodity_type.commodity_group.commodity_group_name', read_only=True)
     commodity_type_name = serializers.CharField(source='commodity_subtype.commodity_type.commodity_type_name', read_only=True)
     commodity_subtype_name = serializers.CharField(source='commodity_subtype.commodity_subtype_name', read_only=True)
     
@@ -71,10 +67,30 @@ class CounterpartyFacilitySerializer(serializers.ModelSerializer):
 
 class CounterpartySerializer(serializers.ModelSerializer):
     facilities = CounterpartyFacilitySerializer(many=True, read_only=True)
+    contacts = serializers.SerializerMethodField()
+    commodity_type_names = serializers.SerializerMethodField()
     
     class Meta:
         model = Counterparty
         fields = '__all__'
+    
+    def get_contacts(self, obj):
+        """Get contacts for this counterparty"""
+        contacts = obj.contacts.filter(is_active=True)
+        return [
+            {
+                'id': contact.id,
+                'name': contact.name,
+                'email': contact.email,
+                'phone': contact.phone,
+                'position': contact.position,
+                'is_primary': contact.is_primary
+            } for contact in contacts
+        ]
+    
+    def get_commodity_type_names(self, obj):
+        """Get commodity type names for display"""
+        return [ct.commodity_type_name for ct in obj.commodity_types.all()]
         
     def validate_counterparty_name(self, value):
         """Validate counterparty name"""
@@ -117,25 +133,76 @@ class CounterpartySerializer(serializers.ModelSerializer):
             if not re.match(email_pattern, value):
                 raise serializers.ValidationError("Please enter a valid email address")
         return value
-    
-    def validate(self, data):
-        """Cross-field validation"""
-        # Ensure at least one type is selected
-        if not data.get('is_customer') and not data.get('is_supplier'):
-            raise serializers.ValidationError({
-                'is_customer': 'Counterparty must be either a customer, supplier, or both'
-            })
-        
-        return data
 
 
 class CounterpartyListSerializer(serializers.ModelSerializer):
     """Simplified serializer for list views"""
+    commodity_type_names = serializers.SerializerMethodField()
+    
     class Meta:
         model = Counterparty
         fields = [
             'id', 'counterparty_name', 'counterparty_code', 'city', 
-            'country', 'is_supplier', 'is_customer', 'email', 'phone'
+            'country', 'email', 'phone', 'is_active', 'commodity_type_names'
+        ]
+    
+    def get_commodity_type_names(self, obj):
+        """Get commodity type names for display"""
+        return [ct.commodity_type_name for ct in obj.commodity_types.all()]
+
+
+class ContactSerializer(serializers.ModelSerializer):
+    counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
+    
+    class Meta:
+        model = Contact
+        fields = '__all__'
+    
+    def validate_name(self, value):
+        """Validate contact name"""
+        if not value.strip():
+            raise serializers.ValidationError("Contact name cannot be empty")
+        return value.strip()
+    
+    def validate_email(self, value):
+        """Validate email format"""
+        if value:
+            import re
+            email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+            if not re.match(email_pattern, value):
+                raise serializers.ValidationError("Please enter a valid email address")
+        return value
+    
+    def validate(self, data):
+        """Cross-field validation"""
+        # Ensure only one primary contact per counterparty
+        if data.get('is_primary'):
+            counterparty = data.get('counterparty')
+            if counterparty:
+                existing_primary = Contact.objects.filter(
+                    counterparty=counterparty, 
+                    is_primary=True
+                )
+                if self.instance:
+                    existing_primary = existing_primary.exclude(id=self.instance.id)
+                
+                if existing_primary.exists():
+                    raise serializers.ValidationError({
+                        'is_primary': 'Only one primary contact is allowed per counterparty'
+                    })
+        
+        return data
+
+
+class ContactListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for list views"""
+    counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
+    
+    class Meta:
+        model = Contact
+        fields = [
+            'id', 'name', 'email', 'phone', 'position', 'department',
+            'is_primary', 'is_active', 'counterparty', 'counterparty_name'
         ]
 
 
@@ -180,7 +247,6 @@ class ContractSerializer(serializers.ModelSerializer):
     trader_name = serializers.CharField(source='trader.trader_name', read_only=True)
     counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
     commodity_name = serializers.CharField(source='commodity.commodity_name_short', read_only=True)
-    commodity_group_name = serializers.CharField(source='commodity.commodity_subtype.commodity_type.commodity_group.commodity_group_name', read_only=True)
     commodity_type_name = serializers.CharField(source='commodity.commodity_subtype.commodity_type.commodity_type_name', read_only=True)
     commodity_subtype_name = serializers.CharField(source='commodity.commodity_subtype.commodity_subtype_name', read_only=True)
     broker_name = serializers.CharField(source='broker.broker_name', read_only=True)

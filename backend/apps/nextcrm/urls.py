@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CurrencyViewSet, CostCenterViewSet, TraderViewSet,
     CommodityGroupViewSet, CommodityTypeViewSet, CommoditySubtypeViewSet,
-    CommodityViewSet, CounterpartyViewSet, CounterpartyFacilityViewSet,
+    CommodityViewSet, CounterpartyViewSet, ContactViewSet, CounterpartyFacilityViewSet,
     BrokerViewSet, ICOTERMViewSet, DeliveryFormatViewSet,
     AdditiveViewSet, SociedadViewSet, TradeOperationTypeViewSet,
     ContractViewSet, TradeSettingViewSet
@@ -24,6 +24,7 @@ router.register(r'commodity-types', CommodityTypeViewSet)
 router.register(r'commodity-subtypes', CommoditySubtypeViewSet)
 router.register(r'commodities', CommodityViewSet)
 router.register(r'counterparties', CounterpartyViewSet)
+router.register(r'contacts', ContactViewSet)
 router.register(r'counterparty-facilities', CounterpartyFacilityViewSet)
 router.register(r'brokers', BrokerViewSet)
 router.register(r'icoterms', ICOTERMViewSet)

@@ -13,7 +13,7 @@ from datetime import timedelta
 
 from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
-    Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
+    Commodity_Subtype, Commodity, Counterparty, Contact, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
     Contract, Counterparty_Facility, Trade_Setting
 )
@@ -21,10 +21,11 @@ from .serializers import (
     CurrencySerializer, CostCenterSerializer, TraderSerializer,
     CommodityGroupSerializer, CommodityTypeSerializer, CommoditySubtypeSerializer,
     CommoditySerializer, CounterpartySerializer, CounterpartyListSerializer,
-    BrokerSerializer, ICOTERMSerializer, DeliveryFormatSerializer,
-    AdditiveSerializer, SociedadSerializer, TradeOperationTypeSerializer,
-    ContractSerializer, ContractListSerializer, ContractCreateSerializer,
-    CounterpartyFacilitySerializer, DashboardStatsSerializer, TradeSettingSerializer
+    ContactSerializer, ContactListSerializer, BrokerSerializer, ICOTERMSerializer, 
+    DeliveryFormatSerializer, AdditiveSerializer, SociedadSerializer, 
+    TradeOperationTypeSerializer, ContractSerializer, ContractListSerializer, 
+    ContractCreateSerializer, CounterpartyFacilitySerializer, DashboardStatsSerializer, 
+    TradeSettingSerializer
 )
 
 
@@ -85,21 +86,21 @@ class CommoditySubtypeViewSet(viewsets.ModelViewSet):
 
 class CommodityViewSet(viewsets.ModelViewSet):
     queryset = Commodity.objects.select_related(
-        'commodity_subtype__commodity_type__commodity_group'
+        'commodity_subtype__commodity_type'
     ).all()
     serializer_class = CommoditySerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['commodity_subtype', 'commodity_subtype__commodity_type', 'commodity_subtype__commodity_type__commodity_group']
+    filterset_fields = ['commodity_subtype', 'commodity_subtype__commodity_type']
     search_fields = ['commodity_name_short', 'commodity_name_full']
     ordering = ['commodity_name_short']
 
 
 class CounterpartyViewSet(viewsets.ModelViewSet):
-    queryset = Counterparty.objects.prefetch_related('facilities').all()
+    queryset = Counterparty.objects.prefetch_related('facilities', 'contacts', 'commodity_types').all()
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_supplier', 'is_customer', 'country']
+    filterset_fields = ['is_active', 'country', 'commodity_types']
     search_fields = ['counterparty_name', 'counterparty_code', 'email']
     ordering = ['counterparty_name']
 
@@ -107,6 +108,20 @@ class CounterpartyViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return CounterpartyListSerializer
         return CounterpartySerializer
+
+
+class ContactViewSet(viewsets.ModelViewSet):
+    queryset = Contact.objects.select_related('counterparty').all()
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['counterparty', 'is_active', 'is_primary', 'department']
+    search_fields = ['name', 'email', 'position', 'counterparty__counterparty_name']
+    ordering = ['counterparty__counterparty_name', 'name']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ContactListSerializer
+        return ContactSerializer
 
 
 class CounterpartyFacilityViewSet(viewsets.ModelViewSet):
@@ -175,14 +190,14 @@ class TradeOperationTypeViewSet(viewsets.ModelViewSet):
 
 class ContractViewSet(viewsets.ModelViewSet):
     queryset = Contract.objects.select_related(
-        'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type__commodity_group', 
+        'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type', 
         'broker', 'trade_currency', 'broker_fee_currency'
     ).all()
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
         'status', 'trader', 'counterparty', 'commodity',
-        'commodity__commodity_subtype__commodity_type__commodity_group',
+        'commodity__commodity_subtype__commodity_type',
         'trade_operation_type', 'date'
     ]
     search_fields = [

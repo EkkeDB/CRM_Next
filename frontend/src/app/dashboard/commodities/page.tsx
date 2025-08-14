@@ -40,7 +40,7 @@ export default function CommoditiesPage() {
   const [commoditySubtypes, setCommoditySubtypes] = useState<CommoditySubtype[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterGroup, setFilterGroup] = useState('all')
+  const [filterType, setFilterType] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCommodity, setEditingCommodity] = useState<Commodity | null>(null)
   const { toast } = useToast()
@@ -48,7 +48,6 @@ export default function CommoditiesPage() {
   const [formData, setFormData] = useState({
     commodity_name_short: '',
     commodity_name_full: '',
-    commodity_group: '',
     commodity_type: '',
     commodity_subtype: '',
     unit_of_measure: 'MT',
@@ -88,11 +87,10 @@ export default function CommoditiesPage() {
     e.preventDefault()
     try {
       // Convert form data to proper types for API
+      // Only submit commodity_subtype since that's what the Commodity model expects
       const commodityData = {
         commodity_name_short: formData.commodity_name_short,
         commodity_name_full: formData.commodity_name_full,
-        commodity_group: parseInt(formData.commodity_group),
-        commodity_type: parseInt(formData.commodity_type),
         commodity_subtype: parseInt(formData.commodity_subtype),
         unit_of_measure: formData.unit_of_measure
       }
@@ -126,12 +124,15 @@ export default function CommoditiesPage() {
 
   const handleEdit = (commodity: Commodity) => {
     setEditingCommodity(commodity)
+    // Find the subtype and its related type to populate the form
+    const subtype = commoditySubtypes.find(s => s.id === commodity.commodity_subtype)
+    const typeId = subtype ? (subtype as any).commodity_type : ''
+    
     setFormData({
       commodity_name_short: commodity.commodity_name_short,
       commodity_name_full: commodity.commodity_name_full || '',
-      commodity_group: commodity.commodity_group_name || '',
-      commodity_type: commodity.commodity_type_name || '',
-      commodity_subtype: commodity.commodity_subtype_name || '',
+      commodity_type: typeId.toString(),
+      commodity_subtype: commodity.commodity_subtype.toString(),
       unit_of_measure: commodity.unit_of_measure || 'MT',
     })
     setDialogOpen(true)
@@ -161,7 +162,6 @@ export default function CommoditiesPage() {
     setFormData({
       commodity_name_short: '',
       commodity_name_full: '',
-      commodity_group: '',
       commodity_type: '',
       commodity_subtype: '',
       unit_of_measure: 'MT',
@@ -188,8 +188,9 @@ export default function CommoditiesPage() {
       commodity.commodity_name_short.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (commodity.commodity_name_full && commodity.commodity_name_full.toLowerCase().includes(searchTerm.toLowerCase()))
 
+    // Filter by type instead of group
     const matchesFilter = 
-      filterGroup === 'all' || commodity.commodity_group_name?.toString() === filterGroup
+      filterType === 'all' || commodity.commodity_type_name === filterType
 
     return matchesSearch && matchesFilter
   })
@@ -279,24 +280,12 @@ export default function CommoditiesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="commodity_group">Commodity Group *</Label>
-                  <Select value={formData.commodity_group} onValueChange={(value) => setFormData({ ...formData, commodity_group: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {commodityGroups.map(group => (
-                        <SelectItem key={group.id} value={group.id.toString()}>{group.commodity_group_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="commodity_type">Commodity Type *</Label>
-                  <Select value={formData.commodity_type} onValueChange={(value) => setFormData({ ...formData, commodity_type: value })}>
+                  <Select value={formData.commodity_type} onValueChange={(value) => {
+                    setFormData({ ...formData, commodity_type: value, commodity_subtype: '' })
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -310,14 +299,21 @@ export default function CommoditiesPage() {
 
                 <div>
                   <Label htmlFor="commodity_subtype">Commodity Subtype *</Label>
-                  <Select value={formData.commodity_subtype} onValueChange={(value) => setFormData({ ...formData, commodity_subtype: value })}>
+                  <Select 
+                    value={formData.commodity_subtype} 
+                    onValueChange={(value) => setFormData({ ...formData, commodity_subtype: value })}
+                    disabled={!formData.commodity_type}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select subtype" />
                     </SelectTrigger>
                     <SelectContent>
-                      {commoditySubtypes.map(subtype => (
-                        <SelectItem key={subtype.id} value={subtype.id.toString()}>{subtype.commodity_subtype_name}</SelectItem>
-                      ))}
+                      {commoditySubtypes
+                        .filter(subtype => !formData.commodity_type || subtype.commodity_type.toString() === formData.commodity_type)
+                        .map(subtype => (
+                          <SelectItem key={subtype.id} value={subtype.id.toString()}>{subtype.commodity_subtype_name}</SelectItem>
+                        ))
+                      }
                     </SelectContent>
                   </Select>
                 </div>
@@ -352,14 +348,14 @@ export default function CommoditiesPage() {
                 className="max-w-sm"
               />
             </div>
-            <Select value={filterGroup} onValueChange={setFilterGroup}>
+            <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by group" />
+                <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Groups</SelectItem>
-                {commodityGroups.map(group => (
-                  <SelectItem key={group.id} value={group.id.toString()}>{group.commodity_group_name}</SelectItem>
+                <SelectItem value="all">All Types</SelectItem>
+                {commodityTypes.map(type => (
+                  <SelectItem key={type.id} value={type.commodity_type_name}>{type.commodity_type_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -385,7 +381,7 @@ export default function CommoditiesPage() {
             <div className="flex items-center space-x-2">
               <Layers className="h-8 w-8 text-blue-600" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Groups</p>
+                <p className="text-sm font-medium text-muted-foreground">Independent Groups</p>
                 <p className="text-2xl font-bold">{commodityGroups.length}</p>
               </div>
             </div>
@@ -430,7 +426,6 @@ export default function CommoditiesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Commodity</TableHead>
-                <TableHead>Group</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Subtype</TableHead>
                 <TableHead>Unit</TableHead>
@@ -449,11 +444,6 @@ export default function CommoditiesPage() {
                         </div>
                       )}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      {commodity.commodity_group_name}
-                    </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
