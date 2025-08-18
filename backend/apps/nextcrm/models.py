@@ -3,6 +3,7 @@ Core business models for NextCRM commodity trading system.
 """
 
 from django.db import models
+from django.contrib.auth.models import User
 from django.utils import timezone
 
 
@@ -41,9 +42,16 @@ class Cost_Center(models.Model):
 
 
 class Trader(models.Model):
+    # Link to Django user (1:1 mapping)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='trader', null=True, blank=True)
+    
     trader_name = models.CharField(max_length=50)
     email = models.EmailField(unique=True, blank=True)
     phone = models.CharField(max_length=20, blank=True)
+    
+    # Access control (defined as strings, will be updated after model definitions)
+    # allowed_commodity_types - defined later
+    # allowed_sociedades - defined later
     
     # Audit fields
     created_at = models.DateTimeField(auto_now_add=True)
@@ -54,6 +62,18 @@ class Trader(models.Model):
 
     def __str__(self):
         return self.trader_name
+    
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        """Get or create a trader for a given user"""
+        trader, created = cls.objects.get_or_create(
+            user=user,
+            defaults={
+                'trader_name': user.get_full_name() or user.username,
+                'email': user.email,
+            }
+        )
+        return trader, created
 
 
 class Commodity_Group(models.Model):
@@ -530,3 +550,19 @@ class Trade_Setting(models.Model):
             return json.loads(self.setting_value)
         else:
             return self.setting_value
+
+
+# Add many-to-many relationships to Trader after all models are defined
+Trader.add_to_class('allowed_commodity_types', models.ManyToManyField(
+    'Commodity_Type', 
+    blank=True, 
+    related_name='traders',
+    help_text="Commodity types this trader can access"
+))
+
+Trader.add_to_class('allowed_sociedades', models.ManyToManyField(
+    'Sociedad', 
+    blank=True, 
+    related_name='traders',
+    help_text="Sociedades this trader can access"
+))

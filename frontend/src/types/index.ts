@@ -20,9 +20,12 @@ export interface User {
   first_name: string
   last_name: string
   is_active: boolean
+  is_staff: boolean
+  is_superuser: boolean
   date_joined: string
   last_login: string | null
   profile: UserProfile
+  trader_id?: number | null
 }
 
 export interface UserProfile {
@@ -33,6 +36,9 @@ export interface UserProfile {
   is_mfa_enabled: boolean
   gdpr_consent: boolean
   gdpr_consent_date: string | null
+  is_approved: boolean
+  is_admin: boolean
+  is_trader: boolean
   created_at: string
   updated_at: string
   last_activity: string | null
@@ -82,6 +88,9 @@ export interface Trader {
   trader_name: string
   email: string
   phone: string
+  user?: number | null
+  allowed_commodity_types?: CommodityType[]
+  allowed_sociedades?: any[]
 }
 
 export interface CommodityGroup {

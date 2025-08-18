@@ -24,6 +24,23 @@ def save_user_profile(sender, instance, **kwargs):
         instance.profile.save()
 
 
+@receiver(post_save, sender=UserProfile)
+def ensure_trader_on_approval(sender, instance, **kwargs):
+    """Create Trader when UserProfile is approved and user is active"""
+    user = instance.user
+    if instance.is_approved and user.is_active:
+        from apps.nextcrm.models import Trader
+        Trader.get_or_create_for_user(user)
+
+
+@receiver(post_save, sender=User)
+def ensure_trader_on_active_user(sender, instance, **kwargs):
+    """Create Trader when User becomes active and has approved profile"""
+    if hasattr(instance, 'profile') and instance.profile.is_approved and instance.is_active:
+        from apps.nextcrm.models import Trader
+        Trader.get_or_create_for_user(instance)
+
+
 @receiver(user_logged_in)
 def log_user_login_success(sender, request, user, **kwargs):
     """Log successful login attempts"""

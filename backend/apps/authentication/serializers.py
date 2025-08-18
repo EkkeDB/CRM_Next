@@ -16,21 +16,28 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'phone', 'company', 'position', 'timezone',
             'is_mfa_enabled', 'gdpr_consent', 'gdpr_consent_date',
+            'is_approved', 'is_admin', 'is_trader',
             'created_at', 'updated_at', 'last_activity'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'last_activity']
+        read_only_fields = ['created_at', 'updated_at', 'last_activity', 'is_admin']
 
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
+    trader_id = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_active', 'date_joined', 'last_login', 'profile'
+            'is_active', 'is_staff', 'is_superuser', 'date_joined', 'last_login', 
+            'profile', 'trader_id'
         ]
-        read_only_fields = ['id', 'date_joined', 'last_login']
+        read_only_fields = ['id', 'date_joined', 'last_login', 'trader_id', 'is_staff', 'is_superuser']
+    
+    def get_trader_id(self, obj):
+        """Return trader ID if user has a linked trader"""
+        return getattr(obj, 'trader', None) and obj.trader.id
 
 
 class RegisterSerializer(serializers.ModelSerializer):

@@ -29,6 +29,11 @@ class UserProfile(models.Model):
     gdpr_consent = models.BooleanField(default=False)
     gdpr_consent_date = models.DateTimeField(null=True, blank=True)
     
+    # User Approval and Admin Status
+    is_approved = models.BooleanField(default=False, help_text="Admin-controlled approval gate")
+    is_admin = models.BooleanField(default=False, help_text="Admin privileges flag")
+    is_trader = models.BooleanField(default=False, help_text="User is a trader flag")
+    
     # Activity Tracking
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -60,6 +65,16 @@ class UserProfile(models.Model):
         if self.failed_login_attempts >= 5:  # Lock after 5 failed attempts
             self.account_locked_until = timezone.now() + timezone.timedelta(minutes=30)
         self.save()
+
+    def sync_admin_status(self):
+        """Sync is_admin with Django's built-in staff/superuser status"""
+        self.is_admin = self.user.is_staff or self.user.is_superuser
+        return self.is_admin
+
+    def save(self, *args, **kwargs):
+        """Override save to sync admin status"""
+        self.sync_admin_status()
+        super().save(*args, **kwargs)
 
 
 class SecurityLog(models.Model):

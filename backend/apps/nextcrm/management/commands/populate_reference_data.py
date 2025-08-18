@@ -4,12 +4,14 @@ This command creates initial data for all reference tables.
 """
 
 from django.core.management.base import BaseCommand
+from django.contrib.auth.models import User
 from django.db import transaction
 from apps.nextcrm.models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type, 
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM, 
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type
 )
+from apps.authentication.models import UserProfile
 
 
 class Command(BaseCommand):
@@ -21,8 +23,9 @@ class Command(BaseCommand):
         with transaction.atomic():
             self.create_currencies()
             self.create_cost_centers()
-            self.create_traders()
             self.create_commodity_groups()
+            self.create_required_commodity_types()  # Create required types first
+            self.create_required_sociedades()      # Create required sociedades first
             self.create_commodity_types()
             self.create_commodity_subtypes()
             self.create_commodities()
@@ -33,6 +36,8 @@ class Command(BaseCommand):
             self.create_additives()
             self.create_sociedades()
             self.create_trade_operation_types()
+            self.create_traders()  # Move traders after other reference data
+            self.link_users_to_traders()  # Link existing users to traders
         
         self.stdout.write(self.style.SUCCESS('Reference data population completed successfully!'))
 
@@ -51,7 +56,10 @@ class Command(BaseCommand):
         ]
         
         for data in currencies_data:
-            Currency.objects.get_or_create(**data)
+            Currency.objects.get_or_create(
+                currency_code=data['currency_code'],
+                defaults=data
+            )
         
         self.stdout.write(f'Created {len(currencies_data)} currencies')
 
@@ -99,24 +107,20 @@ class Command(BaseCommand):
         self.stdout.write(f'Created {len(groups_data)} commodity groups')
 
     def create_commodity_types(self):
-        # Get commodity groups to assign relationships
-        groups = list(Commodity_Group.objects.all())
-        
-        if not groups:
-            self.stdout.write(self.style.WARNING('Cannot create commodity types without commodity groups'))
-            return
-        
         types_data = [
-            {'commodity_type_name': 'Wheat', 'commodity_group': groups[0], 'description': 'Various types of wheat'},
-            {'commodity_type_name': 'Corn', 'commodity_group': groups[0], 'description': 'Corn and corn products'},
-            {'commodity_type_name': 'Crude Oil', 'commodity_group': groups[1], 'description': 'Crude oil products'},
-            {'commodity_type_name': 'Gold', 'commodity_group': groups[2], 'description': 'Gold and gold products'},
-            {'commodity_type_name': 'Coffee', 'commodity_group': groups[3], 'description': 'Coffee beans and products'},
-            {'commodity_type_name': 'Soybeans', 'commodity_group': groups[5], 'description': 'Soybean varieties'},
+            {'commodity_type_name': 'Wheat', 'description': 'Various types of wheat'},
+            {'commodity_type_name': 'Corn', 'description': 'Corn and corn products'},
+            {'commodity_type_name': 'Crude Oil', 'description': 'Crude oil products'},
+            {'commodity_type_name': 'Gold', 'description': 'Gold and gold products'},
+            {'commodity_type_name': 'Coffee', 'description': 'Coffee beans and products'},
+            {'commodity_type_name': 'Soybeans', 'description': 'Soybean varieties'},
         ]
         
         for data in types_data:
-            Commodity_Type.objects.get_or_create(**data)
+            Commodity_Type.objects.get_or_create(
+                commodity_type_name=data['commodity_type_name'],
+                defaults=data
+            )
         
         self.stdout.write(f'Created {len(types_data)} commodity types')
 
@@ -186,9 +190,7 @@ class Command(BaseCommand):
                 'country': 'USA',
                 'phone': '+1-555-1001',
                 'email': 'contact@acmetrading.com',
-                'contact_person': 'Robert Johnson',
-                'is_supplier': True,
-                'is_customer': False
+                'contact_person': 'Robert Johnson'
             },
             {
                 'counterparty_name': 'Global Commodities Ltd',
@@ -198,9 +200,7 @@ class Command(BaseCommand):
                 'country': 'UK',
                 'phone': '+44-20-7123-4567',
                 'email': 'info@globalcommodities.co.uk',
-                'contact_person': 'Margaret Smith',
-                'is_supplier': False,
-                'is_customer': True
+                'contact_person': 'Margaret Smith'
             },
             {
                 'counterparty_name': 'Continental Resources',
@@ -210,9 +210,7 @@ class Command(BaseCommand):
                 'country': 'USA',
                 'phone': '+1-312-555-2001',
                 'email': 'trading@continental.com',
-                'contact_person': 'James Wilson',
-                'is_supplier': True,
-                'is_customer': True
+                'contact_person': 'James Wilson'
             },
         ]
         
@@ -260,7 +258,10 @@ class Command(BaseCommand):
         ]
         
         for data in icoterms_data:
-            ICOTERM.objects.get_or_create(**data)
+            ICOTERM.objects.get_or_create(
+                icoterm_code=data['icoterm_code'],
+                defaults=data
+            )
         
         self.stdout.write(f'Created {len(icoterms_data)} ICOTERMs')
 
@@ -323,3 +324,76 @@ class Command(BaseCommand):
             Trade_Operation_Type.objects.get_or_create(**data)
         
         self.stdout.write(f'Created {len(trade_types_data)} trade operation types')
+
+    def create_required_commodity_types(self):
+        """Create the required commodity types for user access control"""
+        required_types = [
+            {'commodity_type_name': 'seeds', 'description': 'Seeds and seed products'},
+            {'commodity_type_name': 'oil', 'description': 'Oil and oil products'},
+            {'commodity_type_name': 'meal', 'description': 'Meal and meal products'},
+        ]
+        
+        created_count = 0
+        for data in required_types:
+            _, created = Commodity_Type.objects.get_or_create(
+                commodity_type_name=data['commodity_type_name'],
+                defaults=data
+            )
+            if created:
+                created_count += 1
+        
+        self.stdout.write(f'Created {created_count} required commodity types')
+
+    def create_required_sociedades(self):
+        """Create the required sociedades for user access control"""
+        required_sociedades = [
+            {
+                'sociedad_name': 'Sovena España, S.A',
+                'tax_id': 'ESA12345678',
+                'address': 'Calle Principal, Madrid, España'
+            },
+        ]
+        
+        created_count = 0
+        for data in required_sociedades:
+            _, created = Sociedad.objects.get_or_create(
+                sociedad_name=data['sociedad_name'],
+                defaults=data
+            )
+            if created:
+                created_count += 1
+        
+        self.stdout.write(f'Created {created_count} required sociedades')
+
+    def link_users_to_traders(self):
+        """Link existing active users to traders and set up access control"""
+        # Get required commodity types and sociedades
+        seeds = Commodity_Type.objects.filter(commodity_type_name='seeds').first()
+        oil = Commodity_Type.objects.filter(commodity_type_name='oil').first()
+        meal = Commodity_Type.objects.filter(commodity_type_name='meal').first()
+        sovena = Sociedad.objects.filter(sociedad_name='Sovena España, S.A').first()
+        
+        if not all([seeds, oil, meal, sovena]):
+            self.stdout.write(self.style.WARNING('Missing required reference data for user-trader linking'))
+            return
+        
+        # Get active users who don't have traders yet
+        active_users = User.objects.filter(is_active=True).exclude(trader__isnull=False)
+        linked_count = 0
+        
+        for user in active_users:
+            # Ensure user has a profile
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            
+            # Create or get trader for this user
+            trader, created = Trader.get_or_create_for_user(user)
+            
+            if created or not trader.allowed_commodity_types.exists():
+                # Set up access control - grant access to all commodity types and sovena by default
+                trader.allowed_commodity_types.set([seeds, oil, meal])
+                trader.allowed_sociedades.set([sovena])
+                linked_count += 1
+                
+                self.stdout.write(f'Linked user {user.username} to trader {trader.trader_name}')
+        
+        self.stdout.write(f'Linked {linked_count} users to traders with access control')

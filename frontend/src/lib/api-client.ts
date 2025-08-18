@@ -334,7 +334,9 @@ export const authApi = {
       const response = await apiClient.get('/auth/me/')
       return response.data
     } catch (error: any) {
-      console.error('Get profile API error:', error.response?.status, error.message)
+      if (error?.response?.status !== 401) {
+        console.error('Get profile API error:', error.response?.status, error.message)
+      }
       throw error
     }
   },
@@ -1018,6 +1020,60 @@ export const forceCSRFTokenRefresh = () => {
 
 // Export the main API client
 export default apiClient
+
+// Users Management API (Admin only)
+export const usersApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+    is_approved?: boolean
+    is_active?: boolean
+  }): Promise<PaginatedResponse<User>> => {
+    const response = await apiClient.get('/auth/users/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<User> => {
+    const response = await apiClient.get(`/auth/users/${id}/`)
+    return response.data
+  },
+
+  approve: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.post(`/auth/users/${id}/approve/`)
+    return response.data
+  },
+
+  reject: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.post(`/auth/users/${id}/reject/`)
+    return response.data
+  },
+
+  activate: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.post(`/auth/users/${id}/activate/`)
+    return response.data
+  },
+
+  deactivate: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.post(`/auth/users/${id}/deactivate/`)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.delete(`/auth/users/${id}/delete_user/`)
+    return response.data
+  },
+
+  toggleAdmin: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.post(`/auth/users/${id}/toggle_admin/`)
+    return response.data
+  },
+
+  toggleTrader: async (id: number): Promise<{ message: string }> => {
+    const response = await apiClient.post(`/auth/users/${id}/toggle_trader/`)
+    return response.data
+  },
+}
 
 // Export utility functions  
 export { clearAuthState, clearCSRFTokenCache, getCSRFToken, hasNonHttpOnlyAuthCookies, waitForAuthentication }

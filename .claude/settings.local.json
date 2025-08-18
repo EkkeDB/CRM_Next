@@ -57,7 +57,8 @@
       "Bash(./test_comprehensive_edge_cases.sh:*)",
       "Bash(./test_human_qa_simulation.sh:*)",
       "Bash(docker compose:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(# Let''s get both the CSRF token and cookie properly\ncsrf_response=$(curl -s -c csrf_cookies.txt \"\"http://localhost:8000/api/auth/csrf/\"\")\ncsrf_token=$(echo \"\"$csrf_response\"\" | grep -o ''\"\"csrfToken\"\": \"\"[^\"\"]*\"\"'' | cut -d''\"\"'' -f4)\n\necho \"\"CSRF Response: $csrf_response\"\"\necho \"\"CSRF Token: $csrf_token\"\"\n\n# Try login with both the CSRF token and cookie\nlogin_response=$(curl -s -X POST \"\"http://localhost:8000/api/auth/login/\"\" \\\n  -H \"\"Content-Type: application/json\"\" \\\n  -H \"\"X-CSRFToken: $csrf_token\"\" \\\n  -b csrf_cookies.txt \\\n  -c auth_cookies.txt \\\n  -d ''{\"\"username\"\": \"\"admin\"\", \"\"password\"\": \"\"admin\"\"}'')\n\necho \"\"Login response: $login_response\"\")"
     ],
     "deny": []
   }

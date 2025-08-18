@@ -55,6 +55,17 @@ class TraderViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['trader_name', 'email']
     ordering = ['trader_name']
+    
+    def get_queryset(self):
+        """Filter traders to show only approved users with is_trader = True"""
+        queryset = super().get_queryset()
+        
+        # Only show traders whose user is approved and has is_trader = True
+        return queryset.filter(
+            user__isnull=False,
+            user__profile__is_approved=True,
+            user__profile__is_trader=True
+        )
 
 
 class CommodityGroupViewSet(viewsets.ModelViewSet):
@@ -73,6 +84,25 @@ class CommodityTypeViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['commodity_type_name']
     ordering = ['commodity_type_name']
+    
+    def get_queryset(self):
+        """Filter commodity types based on user access control"""
+        queryset = super().get_queryset()
+        
+        # Superusers or admin users see all
+        if self.request.user.is_superuser or (
+            hasattr(self.request.user, 'profile') and 
+            getattr(self.request.user.profile, 'is_admin', False)
+        ):
+            return queryset
+        
+        # Filter by trader's allowed commodity types
+        if hasattr(self.request.user, 'trader') and self.request.user.trader:
+            allowed_types = self.request.user.trader.allowed_commodity_types.all()
+            return queryset.filter(id__in=[ct.id for ct in allowed_types])
+        
+        # Return empty queryset for users without trader
+        return queryset.none()
 
 
 class CommoditySubtypeViewSet(viewsets.ModelViewSet):
@@ -177,6 +207,25 @@ class SociedadViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['sociedad_name', 'tax_id']
     ordering = ['sociedad_name']
+    
+    def get_queryset(self):
+        """Filter sociedades based on user access control"""
+        queryset = super().get_queryset()
+        
+        # Superusers or admin users see all
+        if self.request.user.is_superuser or (
+            hasattr(self.request.user, 'profile') and 
+            getattr(self.request.user.profile, 'is_admin', False)
+        ):
+            return queryset
+        
+        # Filter by trader's allowed sociedades
+        if hasattr(self.request.user, 'trader') and self.request.user.trader:
+            allowed_sociedades = self.request.user.trader.allowed_sociedades.all()
+            return queryset.filter(id__in=[s.id for s in allowed_sociedades])
+        
+        # Return empty queryset for users without trader
+        return queryset.none()
 
 
 class TradeOperationTypeViewSet(viewsets.ModelViewSet):

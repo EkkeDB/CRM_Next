@@ -110,15 +110,21 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 
 class RegisterView(APIView):
-    """User registration view"""
+    """User registration view with approval workflow"""
     permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            
+            # Ensure user has a profile and set as not approved
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.is_approved = False
+            profile.save()
+            
             return Response({
-                'message': 'User created successfully',
+                'message': 'Signup received. Pending admin approval.',
                 'user_id': user.id
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -134,6 +140,10 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
+            
+            # Check if user is approved
+            if hasattr(user, 'profile') and not user.profile.is_approved:
+                return Response({'error': 'Account pending approval'}, status=status.HTTP_403_FORBIDDEN)
             
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -169,9 +179,9 @@ class LoginView(APIView):
             )
             
             # Update user profile activity
-            if hasattr(user, 'profile'):
-                user.profile.last_activity = timezone.now()
-                user.profile.save()
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.last_activity = timezone.now()
+            profile.save()
             
             return response
         
@@ -348,6 +358,120 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
         
         return Response({'message': 'User deactivated successfully'})
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Approve a user account"""
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user = self.get_object()
+        
+        # Ensure user has a profile and approve
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.is_approved = True
+        profile.save()
+        
+        # Ensure a Trader exists for this user
+        from apps.nextcrm.models import Trader
+        Trader.get_or_create_for_user(user)
+        
+        return Response({'message': 'User approved successfully'})
+    
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject a user account"""
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user = self.get_object()
+        
+        # Ensure user has a profile and reject
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.is_approved = False
+        profile.save()
+        
+        # Optionally deactivate the user as well
+        user.is_active = False
+        user.save()
+        
+        return Response({'message': 'User rejected successfully'})
+    
+    @action(detail=True, methods=['delete'])
+    def delete_user(self, request, pk=None):
+        """Delete a user completely"""
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user = self.get_object()
+        
+        # Prevent self-deletion
+        if user.id == request.user.id:
+            return Response(
+                {'error': 'Cannot delete your own account'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        username = user.username
+        user.delete()
+        
+        return Response({'message': f'User "{username}" deleted successfully'})
+    
+    @action(detail=True, methods=['post'])
+    def toggle_admin(self, request, pk=None):
+        """Toggle admin privileges for a user"""
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user = self.get_object()
+        
+        # Prevent removing admin from self
+        if user.id == request.user.id and user.is_superuser:
+            return Response(
+                {'error': 'Cannot remove admin privileges from your own account'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Toggle superuser status
+        user.is_superuser = not user.is_superuser
+        user.is_staff = user.is_superuser  # Keep staff and superuser in sync
+        user.save()
+        
+        status_text = 'granted' if user.is_superuser else 'removed'
+        return Response({'message': f'Admin privileges {status_text} for user "{user.username}"'})
+    
+    @action(detail=True, methods=['post'])
+    def toggle_trader(self, request, pk=None):
+        """Toggle trader status for a user"""
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user = self.get_object()
+        
+        # Ensure user has a profile
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        
+        # Toggle trader status
+        profile.is_trader = not profile.is_trader
+        profile.save()
+        
+        status_text = 'granted' if profile.is_trader else 'removed'
+        return Response({'message': f'Trader status {status_text} for user "{user.username}"'})
 
 
 @api_view(['GET'])
