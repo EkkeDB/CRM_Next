@@ -1,6 +1,6 @@
 # NextCRM - Commodity Trading CRM System
 
-A modern, comprehensive commodity trading CRM system built with Django 5.2.1 and Next.js 15.1.
+A modern, comprehensive commodity trading CRM system built with Django 5.2.1 and Next.js 15.3.
 
 ## 🚀 Features
 
@@ -11,7 +11,7 @@ A modern, comprehensive commodity trading CRM system built with Django 5.2.1 and
 - **Counterparty CRM**: Comprehensive customer relationship management
 - **Commodity Catalog**: Extensive commodity and trading data management
 - **Security**: Comprehensive audit logging and security middleware
-- **Responsive Design**: Modern UI with shadcn/ui and Tailwind CSS 4.0
+- **Responsive Design**: Modern UI with shadcn/ui and Tailwind CSS 3.4
 
 ## 🛠️ Technology Stack
 
@@ -23,9 +23,9 @@ A modern, comprehensive commodity trading CRM system built with Django 5.2.1 and
 - **JWT Authentication** - Secure token-based auth
 
 ### Frontend
-- **Next.js 15.1** - React framework with App Router
+- **Next.js 15.3** - React framework with App Router
 - **TypeScript 5.6** - Type safety
-- **Tailwind CSS 4.0** - Styling
+- **Tailwind CSS 3.4** - Styling
 - **shadcn/ui** - Component library
 - **TanStack Query v5** - Server state management
 - **Recharts 2.8** - Data visualization

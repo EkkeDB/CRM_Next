@@ -52,13 +52,22 @@ export default function IcotermsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for ICOTERM CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'ICOTERM create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingIcoterm) {
+        await referenceDataApi.updateIcoterm(editingIcoterm.id, {
+          icoterm_code: formData.icoterm_code,
+          icoterm_name: formData.icoterm_name,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'ICOTERM updated successfully' })
+      } else {
+        await referenceDataApi.createIcoterm({
+          icoterm_code: formData.icoterm_code,
+          icoterm_name: formData.icoterm_name,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'ICOTERM created successfully' })
+      }
+      await fetchData()
       setDialogOpen(false)
       setEditingIcoterm(null)
       resetForm()
@@ -86,11 +95,9 @@ export default function IcotermsPage() {
     if (!confirm('Are you sure you want to delete this ICOTERM?')) return
     
     try {
-      toast({
-        title: 'Info',
-        description: 'ICOTERM delete API endpoint not yet implemented',
-        variant: 'default'
-      })
+      await referenceDataApi.deleteIcoterm(id)
+      toast({ title: 'Success', description: 'ICOTERM deleted successfully' })
+      await fetchData()
     } catch (error) {
       console.error('Error deleting ICOTERM:', error)
       toast({

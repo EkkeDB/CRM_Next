@@ -17,6 +17,7 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
+from django.conf import settings
 
 from .models import UserProfile, SecurityLog, AuditLog
 from .serializers import (
@@ -36,35 +37,40 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             # Set JWT tokens in HttpOnly cookies
             access_token = response.data['access']
             refresh_token = response.data['refresh']
-            
+
             # Create new response without tokens in body
             new_response = JsonResponse({
                 'message': 'Login successful',
                 'user': request.user.username if hasattr(request, 'user') else None
             })
-            
-            # Set HttpOnly cookies with proper path
+
+            secure = settings.AUTH_COOKIE_SECURE
+            samesite = settings.AUTH_COOKIE_SAMESITE
+            domain = settings.AUTH_COOKIE_DOMAIN
+
+            # Access token cookie
             new_response.set_cookie(
                 'access_token',
                 access_token,
-                max_age=3600,  # 1 hour
+                max_age=settings.AUTH_COOKIE_ACCESS_MAX_AGE,
                 httponly=True,
-                secure=False,  # Set to True in production with HTTPS
-                samesite='Lax',
+                secure=secure,
+                samesite=samesite,
                 path='/',
-                domain=None  # Let browser handle domain for localhost
+                domain=domain
             )
+            # Refresh token cookie
             new_response.set_cookie(
                 'refresh_token',
                 refresh_token,
-                max_age=7 * 24 * 3600,  # 7 days
+                max_age=settings.AUTH_COOKIE_REFRESH_MAX_AGE,
                 httponly=True,
-                secure=False,  # Set to True in production with HTTPS
-                samesite='Lax',
+                secure=secure,
+                samesite=samesite,
                 path='/',
-                domain=None  # Let browser handle domain for localhost
+                domain=domain
             )
-            
+
             return new_response
         
         return response
@@ -88,22 +94,39 @@ class CustomTokenRefreshView(TokenRefreshView):
         
         if response.status_code == 200:
             access_token = response.data['access']
-            
+            new_refresh = response.data.get('refresh')
+
             # Create new response without token in body
             new_response = JsonResponse({'message': 'Token refreshed'})
-            
-            # Set new access token cookie with proper path
+
+            secure = settings.AUTH_COOKIE_SECURE
+            samesite = settings.AUTH_COOKIE_SAMESITE
+            domain = settings.AUTH_COOKIE_DOMAIN
+
+            # Set new access token cookie
             new_response.set_cookie(
                 'access_token',
                 access_token,
-                max_age=3600,  # 1 hour
+                max_age=settings.AUTH_COOKIE_ACCESS_MAX_AGE,
                 httponly=True,
-                secure=False,  # Set to True in production with HTTPS
-                samesite='Lax',
+                secure=secure,
+                samesite=samesite,
                 path='/',
-                domain=None  # Let browser handle domain for localhost
+                domain=domain
             )
-            
+            # If refresh rotation returned a new refresh token, set it too
+            if new_refresh:
+                new_response.set_cookie(
+                    'refresh_token',
+                    new_refresh,
+                    max_age=settings.AUTH_COOKIE_REFRESH_MAX_AGE,
+                    httponly=True,
+                    secure=secure,
+                    samesite=samesite,
+                    path='/',
+                    domain=domain
+                )
+
             return new_response
         
         return response
@@ -147,25 +170,29 @@ class LoginView(APIView):
             })
             
             # Set HttpOnly cookies with proper path and domain
+            secure = settings.AUTH_COOKIE_SECURE
+            samesite = settings.AUTH_COOKIE_SAMESITE
+            domain = settings.AUTH_COOKIE_DOMAIN
+
             response.set_cookie(
                 'access_token',
                 access_token,
-                max_age=3600,  # 1 hour
+                max_age=settings.AUTH_COOKIE_ACCESS_MAX_AGE,
                 httponly=True,
-                secure=False,  # Set to True in production with HTTPS
-                samesite='Lax',
+                secure=secure,
+                samesite=samesite,
                 path='/',
-                domain=None  # Let browser handle domain for localhost
+                domain=domain
             )
             response.set_cookie(
                 'refresh_token',
                 refresh_token,
-                max_age=7 * 24 * 3600,  # 7 days
+                max_age=settings.AUTH_COOKIE_REFRESH_MAX_AGE,
                 httponly=True,
-                secure=False,  # Set to True in production with HTTPS
-                samesite='Lax',
+                secure=secure,
+                samesite=samesite,
                 path='/',
-                domain=None  # Let browser handle domain for localhost
+                domain=domain
             )
             
             # Update user profile activity
@@ -185,6 +212,16 @@ class LogoutView(APIView):
     def post(self, request):
         response = Response({'message': 'Logout successful'})
         
+        # Blacklist refresh token if present
+        refresh_token = request.COOKIES.get('refresh_token')
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                # If blacklist not available or token invalid, proceed to clear cookies
+                pass
+
         # Clear JWT cookies with proper path
         response.delete_cookie('access_token', path='/')
         response.delete_cookie('refresh_token', path='/')

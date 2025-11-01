@@ -50,13 +50,20 @@ export default function CommodityGroupsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for commodity group CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Commodity group create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingGroup) {
+        await referenceDataApi.updateCommodityGroup(editingGroup.id, {
+          commodity_group_name: formData.commodity_group_name,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'Commodity group updated successfully' })
+      } else {
+        await referenceDataApi.createCommodityGroup({
+          commodity_group_name: formData.commodity_group_name,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'Commodity group created successfully' })
+      }
+      await fetchData()
       setDialogOpen(false)
       setEditingGroup(null)
       resetForm()
@@ -81,13 +88,10 @@ export default function CommodityGroupsPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this commodity group?')) return
-    
     try {
-      toast({
-        title: 'Info',
-        description: 'Commodity group delete API endpoint not yet implemented',
-        variant: 'default'
-      })
+      await referenceDataApi.deleteCommodityGroup(id)
+      toast({ title: 'Success', description: 'Commodity group deleted successfully' })
+      await fetchData()
     } catch (error) {
       console.error('Error deleting commodity group:', error)
       toast({
@@ -330,7 +334,7 @@ export default function CommodityGroupsPage() {
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Layers className="h-4 w-4" />
             <span>
-              Commodity group data is loaded from the database. Create/Update/Delete operations require API implementation.
+              Commodity group CRUD is fully enabled. Use the dialog to create or edit groups.
             </span>
           </div>
         </CardContent>

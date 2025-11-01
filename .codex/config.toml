@@ -1,0 +1,21 @@
+{
+  "approval_policy": "never",
+  "internet_access": "allow",
+  "working_directory": ".",
+  "guardrails": {
+    "block_outside_workspace": false
+  },
+  "external_processes": {
+    "allow": [
+      "node",
+      "npm",
+      "pnpm",
+      "yarn",
+      "docker",
+      "docker-compose",
+      "bash",
+      "python3",
+      "git"
+    ]
+  }
+}

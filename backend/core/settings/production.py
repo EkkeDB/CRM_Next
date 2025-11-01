@@ -14,12 +14,20 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
 # Security Settings
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
-SECURE_SSL_REDIRECT = False  # Using HTTP for development environment
-SESSION_COOKIE_SECURE = False  # Using HTTP for development environment
-CSRF_COOKIE_SECURE = False  # Using HTTP for development environment
-SECURE_HSTS_SECONDS = 0  # Disabled for HTTP development environment
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-SECURE_HSTS_PRELOAD = False
+# Enforce HTTPS in production (can be disabled via env for special cases)
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+# HSTS for strong transport security
+SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+# Honor X-Forwarded-Proto from reverse proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Cross-site cookie support for split frontend/backend domains
+SESSION_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_SAMESITE = 'None'
 
 # Email configuration for production
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

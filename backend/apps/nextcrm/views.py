@@ -7,15 +7,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F, DecimalField
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models.functions import TruncMonth
 
 from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
-    Contract, Counterparty_Facility, Trade_Setting
+    Contract, Counterparty_Facility, Trade_Setting, Contact,
+    Deal, DealLine
 )
 from .serializers import (
     CurrencySerializer, CostCenterSerializer, TraderSerializer,
@@ -24,7 +27,8 @@ from .serializers import (
     BrokerSerializer, ICOTERMSerializer, DeliveryFormatSerializer,
     AdditiveSerializer, SociedadSerializer, TradeOperationTypeSerializer,
     ContractSerializer, ContractListSerializer, ContractCreateSerializer,
-    CounterpartyFacilitySerializer, DashboardStatsSerializer, TradeSettingSerializer
+    CounterpartyFacilitySerializer, DashboardStatsSerializer, TradeSettingSerializer, ContactSerializer,
+    DealSerializer, DealCreateSerializer, DealLineSerializer
 )
 
 
@@ -70,7 +74,7 @@ class CommodityTypeViewSet(viewsets.ModelViewSet):
     serializer_class = CommodityTypeSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['commodity_type_name']
+    search_fields = ['commodity_type_name', 'description']
     ordering = ['commodity_type_name']
 
 
@@ -79,18 +83,18 @@ class CommoditySubtypeViewSet(viewsets.ModelViewSet):
     serializer_class = CommoditySubtypeSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['commodity_subtype_name']
+    search_fields = ['commodity_subtype_name', 'description']
     ordering = ['commodity_subtype_name']
 
 
 class CommodityViewSet(viewsets.ModelViewSet):
     queryset = Commodity.objects.select_related(
-        'commodity_subtype__commodity_type__commodity_group'
+        'commodity_group', 'commodity_type', 'commodity_subtype'
     ).all()
     serializer_class = CommoditySerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['commodity_subtype', 'commodity_subtype__commodity_type', 'commodity_subtype__commodity_type__commodity_group']
+    filterset_fields = ['commodity_group', 'commodity_type', 'commodity_subtype']
     search_fields = ['commodity_name_short', 'commodity_name_full']
     ordering = ['commodity_name_short']
 
@@ -168,22 +172,22 @@ class TradeOperationTypeViewSet(viewsets.ModelViewSet):
     queryset = Trade_Operation_Type.objects.all()
     serializer_class = TradeOperationTypeSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['trade_operation_type_name', 'operation_code']
     ordering = ['trade_operation_type_name']
+    filterset_fields = ['trade_operation_type_name', 'operation_code', 'price_type', 'side']
 
 
 class ContractViewSet(viewsets.ModelViewSet):
     queryset = Contract.objects.select_related(
-        'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type__commodity_group', 
+        'trader', 'counterparty', 'commodity__commodity_subtype',
         'broker', 'trade_currency', 'broker_fee_currency'
     ).all()
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
         'status', 'trader', 'counterparty', 'commodity',
-        'commodity__commodity_subtype__commodity_type__commodity_group',
-        'trade_operation_type', 'date'
+        'trade_operation_type', 'date', 'commodity__commodity_subtype'
     ]
     search_fields = [
         'contract_number', 'counterparty__counterparty_name',
@@ -198,14 +202,51 @@ class ContractViewSet(viewsets.ModelViewSet):
             return ContractCreateSerializer
         return ContractSerializer
 
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        safe_fields = [
+            'delivery_format', 'additive', 'broker', 'icoterm', 'cost_center',
+            'broker_fee', 'broker_fee_currency', 'freight_cost', 'forex', 'price',
+            'trade_currency', 'payment_days', 'unit_of_measure', 'entrega', 'notes'
+        ]
+        changed = []
+        for f in safe_fields:
+            if f in serializer.validated_data:
+                new_val = serializer.validated_data.get(f)
+                if getattr(instance, f) != new_val:
+                    changed.append(f)
+
+        self.perform_update(serializer)
+
+        if changed:
+            overrides = instance.override_fields or []
+            # Keep unique entries
+            for f in changed:
+                if f not in overrides:
+                    overrides.append(f)
+            instance.override_fields = overrides
+            instance.save(update_fields=['override_fields'])
+
+        return Response(self.get_serializer(instance).data)
+
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
         """Get dashboard statistics"""
         # Basic stats
         total_contracts = Contract.objects.count()
-        total_value = Contract.objects.aggregate(
-            total=Sum('price')
-        )['total'] or 0
+        total_value = (
+            Contract.objects.aggregate(
+                total=Sum(
+                    F('price') * F('quantity'),
+                    output_field=DecimalField(max_digits=20, decimal_places=2)
+                )
+            )['total']
+            or 0
+        )
         
         active_contracts = Contract.objects.filter(
             status__in=['approved', 'executed']
@@ -216,7 +257,13 @@ class ContractViewSet(viewsets.ModelViewSet):
         # Top counterparties by contract value
         top_counterparties = list(
             Contract.objects.values('counterparty__counterparty_name')
-            .annotate(total_value=Sum('price'), contract_count=Count('id'))
+            .annotate(
+                total_value=Sum(
+                    F('price') * F('quantity'),
+                    output_field=DecimalField(max_digits=20, decimal_places=2)
+                ),
+                contract_count=Count('id')
+            )
             .order_by('-total_value')[:5]
         )
         
@@ -231,9 +278,15 @@ class ContractViewSet(viewsets.ModelViewSet):
         twelve_months_ago = timezone.now().date() - timedelta(days=365)
         monthly_values = list(
             Contract.objects.filter(date__gte=twelve_months_ago)
-            .extra({'month': 'date_trunc(\'month\', date)'})
+            .annotate(month=TruncMonth('date'))
             .values('month')
-            .annotate(total_value=Sum('price'), contract_count=Count('id'))
+            .annotate(
+                total_value=Sum(
+                    F('price') * F('quantity'),
+                    output_field=DecimalField(max_digits=20, decimal_places=2)
+                ),
+                contract_count=Count('id')
+            )
             .order_by('month')
         )
         
@@ -257,6 +310,122 @@ class ContractViewSet(viewsets.ModelViewSet):
         
         serializer = DashboardStatsSerializer(stats)
         return Response(serializer.data)
+
+
+class DealViewSet(viewsets.ModelViewSet):
+    queryset = Deal.objects.select_related(
+        'trader', 'counterparty', 'commodity', 'trade_currency', 'broker_fee_currency'
+    ).prefetch_related('lines').all()
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['deal_number', 'counterparty__counterparty_name']
+    ordering = ['-date', '-created_at']
+    filterset_fields = ['status', 'counterparty', 'trader', 'trade_operation_type']
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return DealCreateSerializer
+        return DealSerializer
+
+    def _propagate_to_children(self, deal: Deal):
+        """Propagate header fields to non-executed child contracts."""
+        fields_to_copy = [
+            'delivery_format', 'additive', 'broker', 'icoterm', 'cost_center',
+            'broker_fee', 'broker_fee_currency', 'freight_cost', 'forex', 'price',
+            'trade_currency', 'payment_days', 'unit_of_measure', 'entrega', 'notes'
+        ]
+        updatable_statuses = ['draft', 'approved']
+
+        contracts = list(deal.contracts.select_for_update().filter(status__in=updatable_statuses))
+        updates = []
+        for c in contracts:
+            overrides = set(c.override_fields or [])
+            any_change = False
+            for f in fields_to_copy:
+                if f in overrides:
+                    continue
+                new_val = getattr(deal, f)
+                if getattr(c, f) != new_val:
+                    setattr(c, f, new_val)
+                    any_change = True
+            if any_change:
+                updates.append(c)
+        if updates:
+            Contract.objects.bulk_update(updates, fields=fields_to_copy)
+            DealLine.objects.filter(deal=deal, materialized_contract__in=[c.id for c in updates]).update(sync_status='synced')
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            self.perform_update(serializer)
+            # Automatically propagate by default; allow opt-out via ?propagate=false
+            propagate = request.query_params.get('propagate', 'true').lower() != 'false'
+            if propagate:
+                # Refresh instance to ensure latest values
+                instance.refresh_from_db()
+                self._propagate_to_children(instance)
+        # Return fresh representation
+        return Response(DealSerializer(instance).data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'])
+    def generate_contracts(self, request, pk=None):
+        """Materialize one Contract per DealLine that lacks a contract"""
+        deal = self.get_object()
+        generated = 0
+        with transaction.atomic():
+            for line in deal.lines.select_for_update():
+                if line.materialized_contract is not None:
+                    continue
+                contract = Contract(
+                    trader=deal.trader,
+                    trade_operation_type=deal.trade_operation_type,
+                    sociedad=deal.sociedad,
+                    counterparty=deal.counterparty,
+                    commodity=deal.commodity,
+                    delivery_format=deal.delivery_format,
+                    additive=deal.additive,
+                    broker=deal.broker,
+                    icoterm=deal.icoterm,
+                    cost_center=deal.cost_center,
+                    broker_fee=deal.broker_fee,
+                    broker_fee_currency=deal.broker_fee_currency,
+                    freight_cost=deal.freight_cost,
+                    forex=deal.forex,
+                    price=deal.price,
+                    trade_currency=deal.trade_currency,
+                    payment_days=deal.payment_days,
+                    quantity=line.quantity,
+                    unit_of_measure=deal.unit_of_measure,
+                    entrega=deal.entrega,
+                    delivery_period=line.delivery_period_start,
+                    date=deal.date,
+                    status=deal.status,
+                    notes=deal.notes,
+                    deal=deal,
+                )
+                contract.save()
+                line.materialized_contract = contract
+                line.sync_status = 'generated'
+                line.save(update_fields=['materialized_contract', 'sync_status'])
+                generated += 1
+
+        return Response({ 'generated': generated }, status=status.HTTP_200_OK)
+
+
+class DealLineViewSet(viewsets.ModelViewSet):
+    queryset = DealLine.objects.select_related('deal', 'materialized_contract').all()
+    serializer_class = DealLineSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['deal', 'sync_status']
+    ordering = ['delivery_period_start']
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -351,3 +520,13 @@ class TradeSettingViewSet(viewsets.ModelViewSet):
         settings = self.get_queryset().filter(setting_type=setting_type, is_active=True)
         serializer = self.get_serializer(settings, many=True)
         return Response(serializer.data)
+
+
+class ContactViewSet(viewsets.ModelViewSet):
+    queryset = Contact.objects.select_related('counterparty').all()
+    serializer_class = ContactSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'counterparty']
+    search_fields = ['name', 'email', 'phone', 'position', 'counterparty__counterparty_name']
+    ordering = ['name']

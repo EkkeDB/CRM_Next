@@ -2,7 +2,7 @@
 Core business models for NextCRM commodity trading system.
 """
 
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -75,7 +75,6 @@ class Commodity_Group(models.Model):
 
 class Commodity_Type(models.Model):
     commodity_type_name = models.CharField(max_length=50)
-    commodity_group = models.ForeignKey(Commodity_Group, on_delete=models.CASCADE, related_name='commodity_types')
     description = models.TextField(blank=True)
     
     # Audit fields
@@ -88,12 +87,11 @@ class Commodity_Type(models.Model):
         verbose_name_plural = 'Commodity Types'
 
     def __str__(self):
-        return f"{self.commodity_type_name} ({self.commodity_group.commodity_group_name})"
+        return self.commodity_type_name
 
 
 class Commodity_Subtype(models.Model):
     commodity_subtype_name = models.CharField(max_length=50)
-    commodity_type = models.ForeignKey(Commodity_Type, on_delete=models.CASCADE, related_name='commodity_subtypes')
     description = models.TextField(blank=True)
     
     # Audit fields
@@ -106,14 +104,18 @@ class Commodity_Subtype(models.Model):
         verbose_name_plural = 'Commodity Subtypes'
 
     def __str__(self):
-        return f"{self.commodity_subtype_name} ({self.commodity_type.commodity_type_name})"
+        return self.commodity_subtype_name
 
 
 class Commodity(models.Model):
     commodity_name_short = models.CharField(max_length=50)
     commodity_name_full = models.CharField(max_length=200, blank=True)
+    commodity_group = models.ForeignKey(Commodity_Group, on_delete=models.PROTECT, null=True, blank=True)
+    commodity_type = models.ForeignKey(Commodity_Type, on_delete=models.PROTECT, null=True, blank=True)
     commodity_subtype = models.ForeignKey(Commodity_Subtype, on_delete=models.CASCADE, related_name='commodities')
     unit_of_measure = models.CharField(max_length=20, default='MT')
+    is_gmo = models.BooleanField(default=False)
+    is_sustainable = models.BooleanField(default=False)
     
     # Audit fields
     created_at = models.DateTimeField(auto_now_add=True)
@@ -123,18 +125,9 @@ class Commodity(models.Model):
         db_table = 'commodities'
         verbose_name_plural = 'Commodities'
 
-    @property
-    def commodity_type(self):
-        """Get the commodity type through the subtype"""
-        return self.commodity_subtype.commodity_type
-    
-    @property
-    def commodity_group(self):
-        """Get the commodity group through the type"""
-        return self.commodity_subtype.commodity_type.commodity_group
-
     def __str__(self):
-        return f"{self.commodity_name_short} - {self.commodity_group.commodity_group_name}"
+        # Keep __str__ simple after de-nesting
+        return self.commodity_name_short
 
 
 class Counterparty(models.Model):
@@ -298,6 +291,17 @@ class Trade_Operation_Type(models.Model):
     trade_operation_type_name = models.CharField(max_length=50)
     operation_code = models.CharField(max_length=10, unique=True, blank=True)
     description = models.TextField(blank=True)
+    PRICE_TYPE_CHOICES = [
+        ('FLAT', 'Flat'),
+        ('UNPRICED', 'Unpriced'),
+        ('FUTURES', 'Futures'),
+    ]
+    SIDE_CHOICES = [
+        ('BUY', 'Buy'),
+        ('SELL', 'Sell'),
+    ]
+    price_type = models.CharField(max_length=10, choices=PRICE_TYPE_CHOICES, default='FLAT')
+    side = models.CharField(max_length=4, choices=SIDE_CHOICES, default='BUY')
     
     # Audit fields
     created_at = models.DateTimeField(auto_now_add=True)
@@ -310,6 +314,144 @@ class Trade_Operation_Type(models.Model):
 
     def __str__(self):
         return self.trade_operation_type_name
+
+
+class DealNumberSequence(models.Model):
+    """Per-year deal number allocator to avoid race conditions"""
+    year = models.IntegerField(unique=True)
+    last_number = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'deal_number_sequences'
+        verbose_name = 'Deal Number Sequence'
+        verbose_name_plural = 'Deal Number Sequences'
+
+    def __str__(self):
+        return f"{self.year} -> {self.last_number}"
+
+
+class Deal(models.Model):
+    """Deal header grouping one or more delivery periods into child contracts"""
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('approved', 'Approved'),
+        ('executed', 'Executed'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Auto-generated fields
+    deal_number = models.CharField(max_length=50, unique=True, blank=True)
+
+    # Core relationships (same semantics as Contract header)
+    trader = models.ForeignKey('Trader', on_delete=models.PROTECT)
+    trade_operation_type = models.ForeignKey('Trade_Operation_Type', on_delete=models.PROTECT)
+    sociedad = models.ForeignKey('Sociedad', on_delete=models.PROTECT)
+    counterparty = models.ForeignKey('Counterparty', on_delete=models.PROTECT)
+    commodity = models.ForeignKey('Commodity', on_delete=models.PROTECT)
+    delivery_format = models.ForeignKey('Delivery_Format', on_delete=models.PROTECT)
+    additive = models.ForeignKey('Additive', on_delete=models.PROTECT)
+    broker = models.ForeignKey('Broker', on_delete=models.PROTECT)
+    icoterm = models.ForeignKey('ICOTERM', on_delete=models.PROTECT)
+    cost_center = models.ForeignKey('Cost_Center', on_delete=models.PROTECT)
+
+    # Financial information (header defaults applied to child contracts)
+    broker_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    broker_fee_currency = models.ForeignKey('Currency', on_delete=models.PROTECT, related_name='broker_fee_deals')
+    freight_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    forex = models.DecimalField(max_digits=10, decimal_places=4)
+    price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    trade_currency = models.ForeignKey('Currency', on_delete=models.PROTECT, related_name='trade_deals')
+
+    # Contract terms
+    payment_days = models.IntegerField()
+    unit_of_measure = models.CharField(max_length=20, default='MT')
+
+    # Delivery information (header-level delivery point)
+    entrega = models.CharField(max_length=200)
+
+    # Deal dates
+    date = models.DateField()  # Deal date
+
+    # Status and metadata
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    notes = models.TextField(blank=True)
+
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'deals'
+        ordering = ['-date', '-created_at']
+
+    def save(self, *args, **kwargs):
+        # Auto-generate deal number safely (transactional, per-year sequence)
+        if not self.deal_number:
+            year = timezone.now().year
+            with transaction.atomic():
+                seq, _ = DealNumberSequence.objects.select_for_update().get_or_create(
+                    year=year,
+                    defaults={
+                        'last_number': 0,
+                    },
+                )
+                seq.last_number += 1
+                seq.save(update_fields=['last_number'])
+                new_number = seq.last_number
+
+            self.deal_number = f"DEAL-{year}-{new_number:06d}"
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.deal_number
+
+
+class DealLine(models.Model):
+    """Minimal deal line that varies only by period and quantity"""
+    SYNC_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('generated', 'Generated'),
+        ('synced', 'Synced'),
+        ('locked', 'Locked'),
+    ]
+
+    deal = models.ForeignKey(Deal, on_delete=models.CASCADE, related_name='lines')
+    delivery_period_start = models.DateField()
+    delivery_period_end = models.DateField()
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+
+    # Link to materialized contract (one-to-one mapping)
+    materialized_contract = models.OneToOneField(
+        'Contract', on_delete=models.SET_NULL, null=True, blank=True, related_name='deal_line'
+    )
+
+    sync_status = models.CharField(max_length=10, choices=SYNC_STATUS_CHOICES, default='pending')
+
+    class Meta:
+        db_table = 'deal_lines'
+        ordering = ['delivery_period_start']
+        indexes = [
+            models.Index(fields=['deal', 'delivery_period_start']),
+        ]
+
+    def __str__(self):
+        return f"{self.deal.deal_number} [{self.delivery_period_start} - {self.delivery_period_end}]"
+
+
+class ContractNumberSequence(models.Model):
+    """Per-year contract number allocator to avoid race conditions"""
+    year = models.IntegerField(unique=True)
+    last_number = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'contract_number_sequences'
+        verbose_name = 'Contract Number Sequence'
+        verbose_name_plural = 'Contract Number Sequences'
+
+    def __str__(self):
+        return f"{self.year} -> {self.last_number}"
 
 
 class Contract(models.Model):
@@ -336,6 +478,9 @@ class Contract(models.Model):
     broker = models.ForeignKey(Broker, on_delete=models.PROTECT)
     icoterm = models.ForeignKey(ICOTERM, on_delete=models.PROTECT)
     cost_center = models.ForeignKey(Cost_Center, on_delete=models.PROTECT)
+
+    # Deal linkage
+    deal = models.ForeignKey('Deal', on_delete=models.PROTECT, null=True, blank=True, related_name='contracts')
     
     # Financial information
     broker_fee = models.DecimalField(max_digits=10, decimal_places=2)
@@ -365,6 +510,8 @@ class Contract(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
+    # Fields edited at contract level that should not be overwritten by Deal propagation
+    override_fields = models.JSONField(null=True, blank=True)
     
     class Meta:
         db_table = 'contracts'
@@ -376,35 +523,23 @@ class Contract(models.Model):
         ]
     
     def save(self, *args, **kwargs):
-        # Auto-generate contract number
+        # Auto-generate contract number safely (transactional, per-year sequence)
         if not self.contract_number:
             year = timezone.now().year
-            last_contract = Contract.objects.filter(
-                contract_number__startswith=f"CONT-{year}"
-            ).order_by('-id').first()
-            
-            if last_contract and last_contract.contract_number:
-                try:
-                    last_number = int(last_contract.contract_number.split('-')[-1])
-                    new_number = last_number + 1
-                except (ValueError, IndexError):
-                    new_number = 1
-            else:
-                new_number = 1
-                
+            with transaction.atomic():
+                seq, _ = ContractNumberSequence.objects.select_for_update().get_or_create(
+                    year=year,
+                    defaults={
+                        'last_number': 0,
+                    },
+                )
+                seq.last_number += 1
+                seq.save(update_fields=['last_number'])
+                new_number = seq.last_number
+
             self.contract_number = f"CONT-{year}-{new_number:06d}"
-        
+
         super().save(*args, **kwargs)
-    
-    @property
-    def commodity_group(self):
-        """Get the commodity group through the commodity hierarchy"""
-        return self.commodity.commodity_group
-    
-    @property
-    def commodity_type(self):
-        """Get the commodity type through the commodity hierarchy"""
-        return self.commodity.commodity_type
     
     @property
     def commodity_subtype(self):
@@ -489,3 +624,36 @@ class Trade_Setting(models.Model):
             return json.loads(self.setting_value)
         else:
             return self.setting_value
+
+
+class Contact(models.Model):
+    """Business contact linked to a Counterparty"""
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+        ('lead', 'Lead'),
+    ]
+
+    counterparty = models.ForeignKey(Counterparty, on_delete=models.CASCADE, related_name='contacts')
+    name = models.CharField(max_length=150)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    position = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=50, blank=True)
+    country = models.CharField(max_length=50, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='lead')
+    source = models.CharField(max_length=50, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_contact = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'contacts'
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['counterparty', 'status']),
+            models.Index(fields=['email']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.counterparty.counterparty_name})"

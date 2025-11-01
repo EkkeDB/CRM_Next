@@ -40,7 +40,6 @@ export default function CommoditiesPage() {
   const [commoditySubtypes, setCommoditySubtypes] = useState<CommoditySubtype[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterGroup, setFilterGroup] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCommodity, setEditingCommodity] = useState<Commodity | null>(null)
   const { toast } = useToast()
@@ -52,6 +51,8 @@ export default function CommoditiesPage() {
     commodity_type: '',
     commodity_subtype: '',
     unit_of_measure: 'MT',
+    is_gmo: false,
+    is_sustainable: false,
   })
 
   useEffect(() => {
@@ -94,7 +95,9 @@ export default function CommoditiesPage() {
         commodity_group: parseInt(formData.commodity_group),
         commodity_type: parseInt(formData.commodity_type),
         commodity_subtype: parseInt(formData.commodity_subtype),
-        unit_of_measure: formData.unit_of_measure
+        unit_of_measure: formData.unit_of_measure,
+        is_gmo: !!formData.is_gmo,
+        is_sustainable: !!formData.is_sustainable,
       }
 
       if (editingCommodity) {
@@ -129,10 +132,12 @@ export default function CommoditiesPage() {
     setFormData({
       commodity_name_short: commodity.commodity_name_short,
       commodity_name_full: commodity.commodity_name_full || '',
-      commodity_group: commodity.commodity_group_name || '',
-      commodity_type: commodity.commodity_type_name || '',
-      commodity_subtype: commodity.commodity_subtype_name || '',
+      commodity_group: (commodity as any).commodity_group?.toString?.() || '',
+      commodity_type: (commodity as any).commodity_type?.toString?.() || '',
+      commodity_subtype: (commodity as any).commodity_subtype?.toString?.() || '',
       unit_of_measure: commodity.unit_of_measure || 'MT',
+      is_gmo: (commodity as any).is_gmo || false,
+      is_sustainable: (commodity as any).is_sustainable || false,
     })
     setDialogOpen(true)
   }
@@ -165,7 +170,14 @@ export default function CommoditiesPage() {
       commodity_type: '',
       commodity_subtype: '',
       unit_of_measure: 'MT',
+      is_gmo: false,
+      is_sustainable: false,
     })
+  }
+
+  const getCommoditySubtypeName = (subtypeId: number) => {
+    const subtype = commoditySubtypes.find(s => s.id === subtypeId)
+    return subtype?.commodity_subtype_name || 'Unknown'
   }
 
   const getCommodityGroupName = (groupId: number) => {
@@ -178,20 +190,11 @@ export default function CommoditiesPage() {
     return type?.commodity_type_name || 'Unknown'
   }
 
-  const getCommoditySubtypeName = (subtypeId: number) => {
-    const subtype = commoditySubtypes.find(s => s.id === subtypeId)
-    return subtype?.commodity_subtype_name || 'Unknown'
-  }
-
   const filteredCommodities = commodities.filter(commodity => {
     const matchesSearch = 
       commodity.commodity_name_short.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (commodity.commodity_name_full && commodity.commodity_name_full.toLowerCase().includes(searchTerm.toLowerCase()))
-
-    const matchesFilter = 
-      filterGroup === 'all' || commodity.commodity_group_name?.toString() === filterGroup
-
-    return matchesSearch && matchesFilter
+    return matchesSearch
   })
 
   const getUnitOfMeasureOptions = () => [
@@ -293,7 +296,6 @@ export default function CommoditiesPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                
                 <div>
                   <Label htmlFor="commodity_type">Commodity Type *</Label>
                   <Select value={formData.commodity_type} onValueChange={(value) => setFormData({ ...formData, commodity_type: value })}>
@@ -307,7 +309,6 @@ export default function CommoditiesPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
                   <Label htmlFor="commodity_subtype">Commodity Subtype *</Label>
                   <Select value={formData.commodity_subtype} onValueChange={(value) => setFormData({ ...formData, commodity_subtype: value })}>
@@ -318,6 +319,33 @@ export default function CommoditiesPage() {
                       {commoditySubtypes.map(subtype => (
                         <SelectItem key={subtype.id} value={subtype.id.toString()}>{subtype.commodity_subtype_name}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="is_gmo">GMO</Label>
+                  <Select value={formData.is_gmo ? 'yes' : 'no'} onValueChange={(value) => setFormData({ ...formData, is_gmo: value === 'yes' })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no">No</SelectItem>
+                      <SelectItem value="yes">Yes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="is_sustainable">Sustainable</Label>
+                  <Select value={formData.is_sustainable ? 'yes' : 'no'} onValueChange={(value) => setFormData({ ...formData, is_sustainable: value === 'yes' })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no">No</SelectItem>
+                      <SelectItem value="yes">Yes</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -352,23 +380,12 @@ export default function CommoditiesPage() {
                 className="max-w-sm"
               />
             </div>
-            <Select value={filterGroup} onValueChange={setFilterGroup}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by group" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Groups</SelectItem>
-                {commodityGroups.map(group => (
-                  <SelectItem key={group.id} value={group.id.toString()}>{group.commodity_group_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -376,28 +393,6 @@ export default function CommoditiesPage() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Commodities</p>
                 <p className="text-2xl font-bold">{commodities.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Layers className="h-8 w-8 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Groups</p>
-                <p className="text-2xl font-bold">{commodityGroups.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Tag className="h-8 w-8 text-orange-600" />
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Types</p>
-                <p className="text-2xl font-bold">{commodityTypes.length}</p>
               </div>
             </div>
           </CardContent>
@@ -427,19 +422,21 @@ export default function CommoditiesPage() {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Commodity</TableHead>
-                <TableHead>Group</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Subtype</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCommodities.map((commodity) => (
-                <TableRow key={commodity.id}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Commodity</TableHead>
+                  <TableHead>Group</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Subtype</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>GMO</TableHead>
+                  <TableHead>Sustainable</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredCommodities.map((commodity) => (
+                  <TableRow key={commodity.id}>
                   <TableCell>
                     <div>
                       <div className="font-medium">{commodity.commodity_name_short}</div>
@@ -452,22 +449,32 @@ export default function CommoditiesPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      {commodity.commodity_group_name}
+                      {(commodity as any).commodity_group_name || getCommodityGroupName((commodity as any).commodity_group)}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                      {commodity.commodity_type_name}
+                      {(commodity as any).commodity_type_name || getCommodityTypeName((commodity as any).commodity_type)}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                      {getCommoditySubtypeName(commodity.commodity_subtype)}
+                      {(commodity as any).commodity_subtype_name || getCommoditySubtypeName((commodity as any).commodity_subtype)}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
                       {commodity.unit_of_measure}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={commodity.is_gmo ? 'destructive' : 'outline'}>
+                      {commodity.is_gmo ? 'Yes' : 'No'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={commodity.is_sustainable ? 'outline' : 'secondary'}>
+                      {commodity.is_sustainable ? 'Yes' : 'No'}
                     </Badge>
                   </TableCell>
                   <TableCell>

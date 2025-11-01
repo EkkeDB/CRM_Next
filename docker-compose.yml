@@ -3,7 +3,6 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:17
-    container_name: nextcrm_postgres
     environment:
       POSTGRES_DB: nextcrm
       POSTGRES_USER: postgres
@@ -24,7 +23,6 @@ services:
   # Redis Cache
   redis:
     image: redis:7.4-alpine
-    container_name: nextcrm_redis
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -43,7 +41,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: nextcrm_backend
     env_file:
       - ./backend/.env
     volumes:
@@ -77,7 +74,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: nextcrm_frontend
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -96,7 +92,6 @@ services:
   # Nginx Reverse Proxy (Optional for production-like setup)
   nginx:
     image: nginx:alpine
-    container_name: nextcrm_nginx
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/conf.d:/etc/nginx/conf.d

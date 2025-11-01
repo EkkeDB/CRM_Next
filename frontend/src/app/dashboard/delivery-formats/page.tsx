@@ -1,6 +1,6 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,87 +11,52 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Truck } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { referenceDataApi } from '@/lib/api-client'
 
-interface DeliveryFormat {
+interface DeliveryFormatRow {
   id: number
-  format_code: string
-  format_name: string
+  delivery_format_name: string
+  delivery_format_cost: string
   description: string
-  transport_mode: string
-  is_active: boolean
-  created_at: string
 }
 
-const mockDeliveryFormats: DeliveryFormat[] = [
-  {
-    id: 1,
-    format_code: 'BULK',
-    format_name: 'Bulk Cargo',
-    description: 'Loose cargo shipped in bulk without packaging',
-    transport_mode: 'Ship',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 2,
-    format_code: 'CONT',
-    format_name: 'Container',
-    description: 'Goods shipped in standardized containers',
-    transport_mode: 'Ship/Truck/Rail',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 3,
-    format_code: 'TANK',
-    format_name: 'Tank Transport',
-    description: 'Liquid commodities in tank containers or trucks',
-    transport_mode: 'Truck/Rail',
-    is_active: true,
-    created_at: '2024-01-01'
-  },
-  {
-    id: 4,
-    format_code: 'BAG',
-    format_name: 'Bagged',
-    description: 'Commodities packaged in bags or sacks',
-    transport_mode: 'Truck/Ship',
-    is_active: true,
-    created_at: '2024-01-01'
-  }
-]
-
 export default function DeliveryFormatsPage() {
-  const [formats, setFormats] = useState<DeliveryFormat[]>(mockDeliveryFormats)
+  const [formats, setFormats] = useState<DeliveryFormatRow[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingFormat, setEditingFormat] = useState<DeliveryFormat | null>(null)
+  const [editingFormat, setEditingFormat] = useState<DeliveryFormatRow | null>(null)
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    format_code: '',
-    format_name: '',
-    description: '',
-    transport_mode: '',
-    is_active: true
+    delivery_format_name: '',
+    delivery_format_cost: '',
+    description: ''
   })
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      const data = await referenceDataApi.getDeliveryFormats()
+      setFormats(data)
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to fetch delivery formats', variant: 'destructive' })
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       if (editingFormat) {
-        const updated = { ...editingFormat, ...formData }
-        setFormats(formats.map(f => f.id === editingFormat.id ? updated : f))
+        await referenceDataApi.updateDeliveryFormat(editingFormat.id, formData)
         toast({ title: 'Success', description: 'Delivery format updated successfully' })
       } else {
-        const newFormat: DeliveryFormat = {
-          ...formData,
-          id: Math.max(...formats.map(f => f.id)) + 1,
-          created_at: new Date().toISOString().split('T')[0]
-        }
-        setFormats([...formats, newFormat])
+        await referenceDataApi.createDeliveryFormat(formData)
         toast({ title: 'Success', description: 'Delivery format created successfully' })
       }
+      await fetchData()
       setDialogOpen(false)
       setEditingFormat(null)
       resetForm()
@@ -101,18 +66,11 @@ export default function DeliveryFormatsPage() {
   }
 
   const resetForm = () => {
-    setFormData({
-      format_code: '',
-      format_name: '',
-      description: '',
-      transport_mode: '',
-      is_active: true
-    })
+    setFormData({ delivery_format_name: '', delivery_format_cost: '', description: '' })
   }
 
   const filteredFormats = formats.filter(format =>
-    format.format_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    format.format_name.toLowerCase().includes(searchTerm.toLowerCase())
+    format.delivery_format_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
@@ -123,7 +81,7 @@ export default function DeliveryFormatsPage() {
             <Truck className="h-8 w-8 text-primary" />
             Delivery Formats
           </h1>
-          <p className="text-gray-600 mt-2">Manage delivery and transport formats</p>
+          <p className="text-gray-600 mt-2">Manage delivery formats</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -141,31 +99,24 @@ export default function DeliveryFormatsPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Format Code *</Label>
-                <Input
-                  value={formData.format_code}
-                  onChange={(e) => setFormData({ ...formData, format_code: e.target.value.toUpperCase() })}
-                  required
-                  placeholder="BULK"
-                />
-              </div>
-              
-              <div>
                 <Label>Format Name *</Label>
                 <Input
-                  value={formData.format_name}
-                  onChange={(e) => setFormData({ ...formData, format_name: e.target.value })}
+                  value={formData.delivery_format_name}
+                  onChange={(e) => setFormData({ ...formData, delivery_format_name: e.target.value })}
                   required
-                  placeholder="Bulk Cargo"
+                  placeholder="Bulk Vessel"
                 />
               </div>
 
               <div>
-                <Label>Transport Mode</Label>
+                <Label>Cost *</Label>
                 <Input
-                  value={formData.transport_mode}
-                  onChange={(e) => setFormData({ ...formData, transport_mode: e.target.value })}
-                  placeholder="Ship/Truck/Rail"
+                  type="number"
+                  step="0.01"
+                  value={formData.delivery_format_cost}
+                  onChange={(e) => setFormData({ ...formData, delivery_format_cost: e.target.value })}
+                  required
+                  placeholder="25.00"
                 />
               </div>
 
@@ -176,17 +127,6 @@ export default function DeliveryFormatsPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description..."
                 />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded"
-                />
-                <Label htmlFor="is_active">Active</Label>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -224,48 +164,39 @@ export default function DeliveryFormatsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Transport Mode</TableHead>
+                <TableHead>Cost</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredFormats.map((format) => (
                 <TableRow key={format.id}>
-                  <TableCell className="font-medium">{format.format_code}</TableCell>
-                  <TableCell>{format.format_name}</TableCell>
+                  <TableCell className="font-medium">{format.delivery_format_name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{format.transport_mode}</Badge>
+                    <Badge variant="outline">{format.delivery_format_cost}</Badge>
                   </TableCell>
                   <TableCell className="max-w-xs truncate">
                     {format.description || 'No description'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={format.is_active ? "default" : "secondary"}>
-                      {format.is_active ? "Active" : "Inactive"}
-                    </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
                       <Button variant="outline" size="sm" onClick={() => {
                         setEditingFormat(format)
                         setFormData({
-                          format_code: format.format_code,
-                          format_name: format.format_name,
+                          delivery_format_name: format.delivery_format_name,
+                          delivery_format_cost: format.delivery_format_cost,
                           description: format.description,
-                          transport_mode: format.transport_mode,
-                          is_active: format.is_active
                         })
                         setDialogOpen(true)
                       }}>
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        setFormats(formats.filter(f => f.id !== format.id))
+                      <Button variant="outline" size="sm" onClick={async () => {
+                        await referenceDataApi.deleteDeliveryFormat(format.id)
                         toast({ title: 'Success', description: 'Delivery format deleted successfully' })
+                        await fetchData()
                       }}>
                         <Trash2 className="h-4 w-4" />
                       </Button>

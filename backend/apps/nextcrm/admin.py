@@ -39,24 +39,27 @@ class CommodityGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Commodity_Type)
 class CommodityTypeAdmin(admin.ModelAdmin):
-    list_display = ('commodity_type_name', 'commodity_group', 'description')
-    list_filter = ('commodity_group',)
-    search_fields = ('commodity_type_name', 'commodity_group__commodity_group_name')
-    ordering = ('commodity_group__commodity_group_name', 'commodity_type_name')
+    list_display = ('commodity_type_name', 'description')
+    list_filter = ()
+    search_fields = ('commodity_type_name',)
+    ordering = ('commodity_type_name',)
 
 
 @admin.register(Commodity_Subtype)
 class CommoditySubtypeAdmin(admin.ModelAdmin):
-    list_display = ('commodity_subtype_name', 'commodity_type', 'description')
-    list_filter = ('commodity_type', 'commodity_type__commodity_group')
-    search_fields = ('commodity_subtype_name', 'commodity_type__commodity_type_name')
-    ordering = ('commodity_type__commodity_type_name', 'commodity_subtype_name')
+    list_display = ('commodity_subtype_name', 'description')
+    list_filter = ()
+    search_fields = ('commodity_subtype_name',)
+    ordering = ('commodity_subtype_name',)
 
 
 @admin.register(Commodity)
 class CommodityAdmin(admin.ModelAdmin):
-    list_display = ('commodity_name_short', 'commodity_name_full', 'commodity_subtype', 'unit_of_measure')
-    list_filter = ('commodity_subtype', 'commodity_subtype__commodity_type', 'commodity_subtype__commodity_type__commodity_group')
+    list_display = (
+        'commodity_name_short', 'commodity_name_full', 'commodity_group', 'commodity_type',
+        'commodity_subtype', 'unit_of_measure', 'is_gmo', 'is_sustainable'
+    )
+    list_filter = ('commodity_group', 'commodity_type', 'commodity_subtype', 'is_gmo', 'is_sustainable')
     search_fields = ('commodity_name_short', 'commodity_name_full')
     ordering = ('commodity_name_short',)
 
@@ -112,7 +115,8 @@ class SociedadAdmin(admin.ModelAdmin):
 
 @admin.register(Trade_Operation_Type)
 class TradeOperationTypeAdmin(admin.ModelAdmin):
-    list_display = ('trade_operation_type_name', 'operation_code')
+    list_display = ('trade_operation_type_name', 'operation_code', 'price_type', 'side')
+    list_filter = ('price_type', 'side')
     search_fields = ('trade_operation_type_name', 'operation_code')
     ordering = ('trade_operation_type_name',)
 
@@ -124,8 +128,7 @@ class ContractAdmin(admin.ModelAdmin):
         'price', 'status', 'date', 'trader'
     )
     list_filter = (
-        'status', 'date', 'trader', 'counterparty', 'commodity__commodity_subtype__commodity_type__commodity_group',
-        'trade_operation_type'
+        'status', 'date', 'trader', 'counterparty', 'trade_operation_type'
     )
     search_fields = (
         'contract_number', 'counterparty__counterparty_name',

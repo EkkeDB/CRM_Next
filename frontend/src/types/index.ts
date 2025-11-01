@@ -93,29 +93,28 @@ export interface CommodityGroup {
 export interface CommodityType {
   id: number
   commodity_type_name: string
-  commodity_group: number
   description: string
-  commodity_group_name?: string
 }
 
 export interface CommoditySubtype {
   id: number
   commodity_subtype_name: string
-  commodity_type: number
   description: string
-  commodity_type_name?: string
-  commodity_group_name?: string
 }
 
 export interface Commodity {
   id: number
   commodity_name_short: string
   commodity_name_full: string
+  commodity_group: number
+  commodity_type: number
   commodity_subtype: number
   unit_of_measure: string
+  is_gmo: boolean
+  is_sustainable: boolean
   commodity_subtype_name?: string
-  commodity_type_name?: string
   commodity_group_name?: string
+  commodity_type_name?: string
 }
 
 export interface CounterpartyFacility {
@@ -190,6 +189,49 @@ export interface TradeOperationType {
   trade_operation_type_name: string
   operation_code: string
   description: string
+  price_type?: 'FLAT' | 'UNPRICED' | 'FUTURES'
+  side?: 'BUY' | 'SELL'
+}
+
+export interface DealLine {
+  id: number
+  deal: number
+  delivery_period_start: string
+  delivery_period_end: string
+  quantity: string
+  sync_status: 'pending' | 'generated' | 'synced' | 'locked'
+  contract_id?: number | null
+  contract_number?: string | null
+}
+
+export interface Deal {
+  id: number
+  deal_number: string
+  trader: number
+  trade_operation_type: number
+  sociedad: number
+  counterparty: number
+  commodity: number
+  delivery_format: number
+  additive: number
+  broker: number
+  icoterm: number
+  cost_center: number
+  broker_fee: string
+  broker_fee_currency: number
+  freight_cost: string
+  forex: string
+  price: string
+  trade_currency: number
+  payment_days: number
+  unit_of_measure: string
+  entrega: string
+  date: string
+  status: 'draft' | 'approved' | 'executed' | 'completed' | 'cancelled'
+  notes?: string
+  created_at?: string
+  updated_at?: string
+  lines?: DealLine[]
 }
 
 export interface Contact {
@@ -206,11 +248,14 @@ export interface Contact {
   notes: string
   created_at: string
   last_contact: string
+  counterparty_id?: number
 }
 
 export interface Contract {
   id: number
   contract_number: string
+  deal?: number | null
+  deal_number?: string | null
   trader: number
   trade_operation_type: number
   sociedad: number
@@ -423,4 +468,3 @@ export interface ApiError {
   code?: string
   details?: Record<string, any>
 }
-

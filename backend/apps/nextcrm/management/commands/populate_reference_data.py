@@ -19,7 +19,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Starting reference data population...'))
         
         with transaction.atomic():
-            self.create_currencies()
+            self.create_currencies_utf8()
             self.create_cost_centers()
             self.create_traders()
             self.create_commodity_groups()
@@ -36,7 +36,8 @@ class Command(BaseCommand):
         
         self.stdout.write(self.style.SUCCESS('Reference data population completed successfully!'))
 
-    def create_currencies(self):
+    # Legacy function retained only for historical reference; do not use.
+    def __legacy_removed_create_currencies(self):
         currencies_data = [
             {'currency_code': 'USD', 'currency_name': 'US Dollar', 'currency_symbol': '$'},
             {'currency_code': 'EUR', 'currency_name': 'Euro', 'currency_symbol': '€'},
@@ -54,6 +55,35 @@ class Command(BaseCommand):
             Currency.objects.get_or_create(**data)
         
         self.stdout.write(f'Created {len(currencies_data)} currencies')
+
+    def create_currencies_utf8(self):
+        """Create currencies with correct UTF-8 symbols for currency_symbol"""
+        currencies_data = [
+            {'currency_code': 'USD', 'currency_name': 'US Dollar', 'currency_symbol': '$'},
+            {'currency_code': 'EUR', 'currency_name': 'Euro', 'currency_symbol': '€'},
+            {'currency_code': 'GBP', 'currency_name': 'British Pound', 'currency_symbol': '£'},
+            {'currency_code': 'JPY', 'currency_name': 'Japanese Yen', 'currency_symbol': '¥'},
+            {'currency_code': 'CAD', 'currency_name': 'Canadian Dollar', 'currency_symbol': 'C$'},
+            {'currency_code': 'AUD', 'currency_name': 'Australian Dollar', 'currency_symbol': 'A$'},
+            {'currency_code': 'CHF', 'currency_name': 'Swiss Franc', 'currency_symbol': 'CHF'},
+            {'currency_code': 'CNY', 'currency_name': 'Chinese Yuan', 'currency_symbol': '¥'},
+            {'currency_code': 'BRL', 'currency_name': 'Brazilian Real', 'currency_symbol': 'R$'},
+            {'currency_code': 'INR', 'currency_name': 'Indian Rupee', 'currency_symbol': '₹'},
+        ]
+
+        created_or_updated = 0
+        for data in currencies_data:
+            # Upsert by unique code to avoid IntegrityError on reruns
+            Currency.objects.update_or_create(
+                currency_code=data['currency_code'],
+                defaults={
+                    'currency_name': data['currency_name'],
+                    'currency_symbol': data['currency_symbol'],
+                }
+            )
+            created_or_updated += 1
+
+        self.stdout.write(f'Created/updated {created_or_updated} currencies')
 
     def create_cost_centers(self):
         cost_centers_data = [
@@ -99,20 +129,17 @@ class Command(BaseCommand):
         self.stdout.write(f'Created {len(groups_data)} commodity groups')
 
     def create_commodity_types(self):
-        # Get commodity groups to assign relationships
-        groups = list(Commodity_Group.objects.all())
-        
-        if not groups:
-            self.stdout.write(self.style.WARNING('Cannot create commodity types without commodity groups'))
-            return
-        
+        # De-nested: create commodity types independently (no FK to group)
         types_data = [
-            {'commodity_type_name': 'Wheat', 'commodity_group': groups[0], 'description': 'Various types of wheat'},
-            {'commodity_type_name': 'Corn', 'commodity_group': groups[0], 'description': 'Corn and corn products'},
-            {'commodity_type_name': 'Crude Oil', 'commodity_group': groups[1], 'description': 'Crude oil products'},
-            {'commodity_type_name': 'Gold', 'commodity_group': groups[2], 'description': 'Gold and gold products'},
-            {'commodity_type_name': 'Coffee', 'commodity_group': groups[3], 'description': 'Coffee beans and products'},
-            {'commodity_type_name': 'Soybeans', 'commodity_group': groups[5], 'description': 'Soybean varieties'},
+            {'commodity_type_name': 'Wheat', 'description': 'Various types of wheat'},
+            {'commodity_type_name': 'Corn', 'description': 'Corn and corn products'},
+            {'commodity_type_name': 'Crude Oil', 'description': 'Crude oil products'},
+            {'commodity_type_name': 'Gold', 'description': 'Gold and gold products'},
+            {'commodity_type_name': 'Coffee', 'description': 'Coffee beans and products'},
+            {'commodity_type_name': 'Soybeans', 'description': 'Soybean varieties'},
+            {'commodity_type_name': 'Oil', 'description': 'Vegetable oils'},
+            {'commodity_type_name': 'Meal', 'description': 'Protein meals'},
+            {'commodity_type_name': 'Seeds', 'description': 'Oilseeds'},
         ]
         
         for data in types_data:
@@ -121,20 +148,17 @@ class Command(BaseCommand):
         self.stdout.write(f'Created {len(types_data)} commodity types')
 
     def create_commodity_subtypes(self):
-        # Get commodity types to assign relationships
-        types = list(Commodity_Type.objects.all())
-        
-        if not types:
-            self.stdout.write(self.style.WARNING('Cannot create commodity subtypes without commodity types'))
-            return
-        
+        # De-nested: create commodity subtypes independently (no FK to type)
         subtypes_data = [
-            {'commodity_subtype_name': 'Hard Red Winter', 'commodity_type': types[0], 'description': 'Hard red winter wheat'},
-            {'commodity_subtype_name': 'Yellow Corn', 'commodity_type': types[1], 'description': 'Standard yellow corn'},
-            {'commodity_subtype_name': 'WTI', 'commodity_type': types[2], 'description': 'West Texas Intermediate crude oil'},
-            {'commodity_subtype_name': 'Fine Gold', 'commodity_type': types[3], 'description': '99.9% pure gold'},
-            {'commodity_subtype_name': 'Arabica', 'commodity_type': types[4], 'description': 'Arabica coffee beans'},
-            {'commodity_subtype_name': 'No. 1 Yellow', 'commodity_type': types[5], 'description': 'No. 1 yellow soybeans'},
+            {'commodity_subtype_name': 'Hard Red Winter', 'description': 'Hard red winter wheat'},
+            {'commodity_subtype_name': 'Yellow Corn', 'description': 'Standard yellow corn'},
+            {'commodity_subtype_name': 'WTI', 'description': 'West Texas Intermediate crude oil'},
+            {'commodity_subtype_name': 'Fine Gold', 'description': '99.9% pure gold'},
+            {'commodity_subtype_name': 'Arabica', 'description': 'Arabica coffee beans'},
+            {'commodity_subtype_name': 'No. 1 Yellow', 'description': 'No. 1 yellow soybeans'},
+            {'commodity_subtype_name': 'High Oleic', 'description': 'High oleic profile'},
+            {'commodity_subtype_name': 'Conventional', 'description': 'Standard quality'},
+            {'commodity_subtype_name': 'High erucic', 'description': 'High erucic acid'},
         ]
         
         for data in subtypes_data:

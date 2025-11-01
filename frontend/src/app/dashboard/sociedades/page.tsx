@@ -51,13 +51,14 @@ export default function SociedadesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for sociedad CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Sociedad create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingSociedad) {
+        await referenceDataApi.updateSociedad(editingSociedad.id, formData)
+        toast({ title: 'Success', description: 'Sociedad updated successfully' })
+      } else {
+        await referenceDataApi.createSociedad(formData)
+        toast({ title: 'Success', description: 'Sociedad created successfully' })
+      }
+      await fetchData()
       setDialogOpen(false)
       setEditingSociedad(null)
       resetForm()
@@ -85,11 +86,9 @@ export default function SociedadesPage() {
     if (!confirm('Are you sure you want to delete this sociedad?')) return
     
     try {
-      toast({
-        title: 'Info',
-        description: 'Sociedad delete API endpoint not yet implemented',
-        variant: 'default'
-      })
+      await referenceDataApi.deleteSociedad(id)
+      toast({ title: 'Success', description: 'Sociedad deleted successfully' })
+      await fetchData()
     } catch (error) {
       console.error('Error deleting sociedad:', error)
       toast({

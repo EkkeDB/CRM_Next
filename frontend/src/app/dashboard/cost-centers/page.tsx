@@ -50,13 +50,20 @@ export default function CostCentersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for cost center CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Cost center create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingCostCenter) {
+        await referenceDataApi.updateCostCenter(editingCostCenter.id, {
+          cost_center_name: formData.cost_center_name,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'Cost center updated successfully' })
+      } else {
+        await referenceDataApi.createCostCenter({
+          cost_center_name: formData.cost_center_name,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'Cost center created successfully' })
+      }
+      await fetchData()
       setDialogOpen(false)
       setEditingCostCenter(null)
       resetForm()
@@ -83,11 +90,9 @@ export default function CostCentersPage() {
     if (!confirm('Are you sure you want to delete this cost center?')) return
     
     try {
-      toast({
-        title: 'Info',
-        description: 'Cost center delete API endpoint not yet implemented',
-        variant: 'default'
-      })
+      await referenceDataApi.deleteCostCenter(id)
+      toast({ title: 'Success', description: 'Cost center deleted successfully' })
+      await fetchData()
     } catch (error) {
       console.error('Error deleting cost center:', error)
       toast({

@@ -8,7 +8,8 @@ from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
-    Contract, Counterparty_Facility, Trade_Setting
+    Contract, Counterparty_Facility, Trade_Setting, Contact,
+    Deal, DealLine
 )
 
 
@@ -37,25 +38,20 @@ class CommodityGroupSerializer(serializers.ModelSerializer):
 
 
 class CommodityTypeSerializer(serializers.ModelSerializer):
-    commodity_group_name = serializers.CharField(source='commodity_group.commodity_group_name', read_only=True)
-    
     class Meta:
         model = Commodity_Type
         fields = '__all__'
 
 
 class CommoditySubtypeSerializer(serializers.ModelSerializer):
-    commodity_type_name = serializers.CharField(source='commodity_type.commodity_type_name', read_only=True)
-    commodity_group_name = serializers.CharField(source='commodity_type.commodity_group.commodity_group_name', read_only=True)
-    
     class Meta:
         model = Commodity_Subtype
         fields = '__all__'
 
 
 class CommoditySerializer(serializers.ModelSerializer):
-    commodity_group_name = serializers.CharField(source='commodity_subtype.commodity_type.commodity_group.commodity_group_name', read_only=True)
-    commodity_type_name = serializers.CharField(source='commodity_subtype.commodity_type.commodity_type_name', read_only=True)
+    commodity_group_name = serializers.CharField(source='commodity_group.commodity_group_name', read_only=True)
+    commodity_type_name = serializers.CharField(source='commodity_type.commodity_type_name', read_only=True)
     commodity_subtype_name = serializers.CharField(source='commodity_subtype.commodity_subtype_name', read_only=True)
     
     class Meta:
@@ -180,8 +176,6 @@ class ContractSerializer(serializers.ModelSerializer):
     trader_name = serializers.CharField(source='trader.trader_name', read_only=True)
     counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
     commodity_name = serializers.CharField(source='commodity.commodity_name_short', read_only=True)
-    commodity_group_name = serializers.CharField(source='commodity.commodity_subtype.commodity_type.commodity_group.commodity_group_name', read_only=True)
-    commodity_type_name = serializers.CharField(source='commodity.commodity_subtype.commodity_type.commodity_type_name', read_only=True)
     commodity_subtype_name = serializers.CharField(source='commodity.commodity_subtype.commodity_subtype_name', read_only=True)
     broker_name = serializers.CharField(source='broker.broker_name', read_only=True)
     trade_currency_code = serializers.CharField(source='trade_currency.currency_code', read_only=True)
@@ -201,13 +195,14 @@ class ContractListSerializer(serializers.ModelSerializer):
     commodity_name = serializers.CharField(source='commodity.commodity_name_short', read_only=True)
     trade_currency_code = serializers.CharField(source='trade_currency.currency_code', read_only=True)
     total_value = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
-    
+    deal_number = serializers.CharField(source='deal.deal_number', read_only=True)
+
     class Meta:
         model = Contract
         fields = [
             'id', 'contract_number', 'status', 'date', 'trader_name',
             'counterparty_name', 'commodity_name', 'quantity', 'price',
-            'trade_currency_code', 'total_value', 'delivery_period'
+            'trade_currency_code', 'total_value', 'delivery_period', 'deal', 'deal_number'
         ]
 
 
@@ -244,6 +239,93 @@ class ContractCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(errors)
         
         return data
+
+
+class DealLineSerializer(serializers.ModelSerializer):
+    contract_id = serializers.IntegerField(source='materialized_contract.id', read_only=True)
+    contract_number = serializers.CharField(source='materialized_contract.contract_number', read_only=True)
+
+    class Meta:
+        model = DealLine
+        fields = [
+            'id', 'deal', 'delivery_period_start', 'delivery_period_end',
+            'quantity', 'sync_status', 'contract_id', 'contract_number'
+        ]
+        read_only_fields = ('sync_status', 'contract_id', 'contract_number')
+
+
+class DealSerializer(serializers.ModelSerializer):
+    lines = DealLineSerializer(many=True, read_only=True)
+    trader_name = serializers.CharField(source='trader.trader_name', read_only=True)
+    counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
+    commodity_name = serializers.CharField(source='commodity.commodity_name_short', read_only=True)
+    trade_currency_code = serializers.CharField(source='trade_currency.currency_code', read_only=True)
+    broker_fee_currency_code = serializers.CharField(source='broker_fee_currency.currency_code', read_only=True)
+
+    class Meta:
+        model = Deal
+        fields = '__all__'
+        read_only_fields = ('deal_number', 'created_at', 'updated_at')
+
+
+class DealCreateLineInput(serializers.Serializer):
+    delivery_period_start = serializers.DateField()
+    delivery_period_end = serializers.DateField()
+    quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+
+
+class DealCreateSerializer(serializers.ModelSerializer):
+    lines = DealCreateLineInput(many=True, write_only=True)
+
+    class Meta:
+        model = Deal
+        fields = [
+            'id', 'deal_number', 'trader', 'trade_operation_type', 'sociedad', 'counterparty',
+            'commodity', 'delivery_format', 'additive', 'broker', 'icoterm', 'cost_center',
+            'broker_fee', 'broker_fee_currency', 'freight_cost', 'forex', 'price', 'trade_currency',
+            'payment_days', 'unit_of_measure', 'entrega', 'date', 'status', 'notes', 'lines'
+        ]
+        read_only_fields = ('deal_number',)
+
+    def validate_lines(self, value):
+        if not value:
+            raise serializers.ValidationError('At least one delivery period (line) is required')
+        # Basic checks: start <= end, quantity > 0, no overlaps
+        errors = []
+        periods = []
+        for idx, line in enumerate(value):
+            start = line.get('delivery_period_start')
+            end = line.get('delivery_period_end')
+            qty = line.get('quantity')
+            if start and end and start > end:
+                errors.append(f'Line {idx+1}: start cannot be after end')
+            if qty is None or qty <= 0:
+                errors.append(f'Line {idx+1}: quantity must be greater than 0')
+            periods.append((start, end))
+        # Overlap detection (same deal)
+        sorted_periods = sorted(periods, key=lambda p: p[0])
+        for i in range(1, len(sorted_periods)):
+            prev_end = sorted_periods[i-1][1]
+            cur_start = sorted_periods[i][0]
+            if prev_end >= cur_start:
+                errors.append('Delivery periods must not overlap')
+                break
+        if errors:
+            raise serializers.ValidationError({'lines': errors})
+        return value
+
+    def create(self, validated_data):
+        lines = validated_data.pop('lines', [])
+        deal = Deal.objects.create(**validated_data)
+        DealLine.objects.bulk_create([
+            DealLine(
+                deal=deal,
+                delivery_period_start=l['delivery_period_start'],
+                delivery_period_end=l['delivery_period_end'],
+                quantity=l['quantity'],
+            ) for l in lines
+        ])
+        return deal
 
 
 class DashboardStatsSerializer(serializers.Serializer):
@@ -299,3 +381,18 @@ class TradeSettingSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Value must be valid JSON")
         
         return value
+
+
+class ContactSerializer(serializers.ModelSerializer):
+    company = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
+    counterparty = serializers.PrimaryKeyRelatedField(queryset=Counterparty.objects.all(), write_only=True)
+    counterparty_id = serializers.IntegerField(source='counterparty.id', read_only=True)
+
+    class Meta:
+        model = Contact
+        fields = [
+            'id', 'name', 'email', 'phone', 'position', 'city', 'country',
+            'status', 'source', 'notes', 'created_at', 'last_contact',
+            'counterparty', 'company', 'counterparty_id'
+        ]
+        read_only_fields = ['id', 'created_at', 'company']

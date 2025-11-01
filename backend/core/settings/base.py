@@ -30,6 +30,7 @@ THIRD_PARTY_APPS = [
     'django_extensions',
     'drf_spectacular',
     'django_filters',
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 LOCAL_APPS = [
@@ -308,3 +309,11 @@ LOGGING = {
 
 # Create logs directory
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+# Centralized auth cookie configuration
+# Used by authentication views to set HttpOnly JWT cookies consistently
+AUTH_COOKIE_SECURE = config('AUTH_COOKIE_SECURE', default=False, cast=bool)
+AUTH_COOKIE_SAMESITE = config('AUTH_COOKIE_SAMESITE', default='Lax')  # Lax | None | Strict
+AUTH_COOKIE_DOMAIN = config('AUTH_COOKIE_DOMAIN', default=None)
+AUTH_COOKIE_ACCESS_MAX_AGE = config('AUTH_COOKIE_ACCESS_MAX_AGE', default=3600, cast=int)  # 1 hour
+AUTH_COOKIE_REFRESH_MAX_AGE = config('AUTH_COOKIE_REFRESH_MAX_AGE', default=7 * 24 * 3600, cast=int)  # 7 days

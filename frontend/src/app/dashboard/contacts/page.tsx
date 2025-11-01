@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Users, Mail, Phone, MapPin, Building2, Activity } from 'lucide-react'
-import { contactsApi } from '@/lib/api-client'
+import { contactsApi, referenceDataApi } from '@/lib/api-client'
+import { counterpartiesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { Contact } from '@/types'
 
@@ -31,6 +32,7 @@ export default function ContactsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
   const { toast } = useToast()
 
@@ -38,7 +40,7 @@ export default function ContactsPage() {
     name: '',
     email: '',
     phone: '',
-    company: '',
+    counterparty: '',
     position: '',
     city: '',
     country: '',
@@ -46,9 +48,11 @@ export default function ContactsPage() {
     source: '',
     notes: ''
   })
+  const [counterpartyOptions, setCounterpartyOptions] = useState<{ value: number; label: string }[]>([])
 
   useEffect(() => {
     fetchData()
+    fetchCounterparties()
   }, [])
 
   const fetchData = async () => {
@@ -68,13 +72,35 @@ export default function ContactsPage() {
     }
   }
 
+  const fetchCounterparties = async () => {
+    try {
+      const data = await counterpartiesApi.getAll({ page_size: 1000 })
+      const list = data.results || []
+      setCounterpartyOptions(list.map((cp: any) => ({ value: cp.id, label: cp.counterparty_name })))
+    } catch (e) {
+      // Soft-fail; page still works but without enforced link
+      console.warn('Failed to load counterparties for contacts form')
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       setLoading(true)
       if (editingContact) {
         // Update existing contact
-        const updatedContact = await contactsApi.update(editingContact.id, formData)
+        const updatedContact = await contactsApi.update(editingContact.id, {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          position: formData.position,
+          city: formData.city,
+          country: formData.country,
+          status: formData.status,
+          source: formData.source,
+          notes: formData.notes,
+          counterparty: formData.counterparty ? parseInt(formData.counterparty) : undefined,
+        })
         setContacts(contacts.map(c => c.id === editingContact.id ? updatedContact : c))
         toast({
           title: 'Success',
@@ -82,7 +108,18 @@ export default function ContactsPage() {
         })
       } else {
         // Create new contact
-        const newContact = await contactsApi.create(formData)
+        const newContact = await contactsApi.create({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          position: formData.position,
+          city: formData.city,
+          country: formData.country,
+          status: formData.status,
+          source: formData.source,
+          notes: formData.notes,
+          counterparty: parseInt(formData.counterparty),
+        })
         setContacts([...contacts, newContact])
         toast({
           title: 'Success',
@@ -104,21 +141,29 @@ export default function ContactsPage() {
     }
   }
 
-  const handleEdit = (contact: Contact) => {
-    setEditingContact(contact)
-    setFormData({
-      name: contact.name,
-      email: contact.email,
-      phone: contact.phone,
-      company: contact.company,
-      position: contact.position,
-      city: contact.city,
-      country: contact.country,
-      status: contact.status,
-      source: contact.source,
-      notes: contact.notes
-    })
+  const handleEdit = async (contact: Contact) => {
+    setEditLoading(true)
     setDialogOpen(true)
+    try {
+      const full = await contactsApi.getById(contact.id)
+      setEditingContact(full)
+      setFormData({
+        name: full.name,
+        email: full.email,
+        phone: full.phone,
+        counterparty: (full as any).counterparty_id?.toString?.() ?? '',
+        position: full.position,
+        city: full.city,
+        country: full.country,
+        status: full.status,
+        source: full.source,
+        notes: full.notes,
+      })
+    } catch (e) {
+      console.error('Failed to load contact details', e)
+      toast({ title: 'Error', description: 'Failed to load contact details', variant: 'destructive' })
+    }
+    setEditLoading(false)
   }
 
   const handleDelete = async (id: number) => {
@@ -146,7 +191,7 @@ export default function ContactsPage() {
       name: '',
       email: '',
       phone: '',
-      company: '',
+      counterparty: '',
       position: '',
       city: '',
       country: '',
@@ -226,6 +271,12 @@ export default function ContactsPage() {
                 Fill in the details to {editingContact ? 'update' : 'create'} a contact.
               </DialogDescription>
             </DialogHeader>
+            {editLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <span className="ml-3 text-sm text-muted-foreground">Loading contact...</span>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -278,13 +329,17 @@ export default function ContactsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="company">Company</Label>
-                  <Input
-                    id="company"
-                    value={formData.company}
-                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                    placeholder="Company Name"
-                  />
+                  <Label htmlFor="counterparty">Company</Label>
+                  <Select value={formData.counterparty} onValueChange={(value) => setFormData({ ...formData, counterparty: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {counterpartyOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value.toString()}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label htmlFor="position">Position</Label>
@@ -351,6 +406,7 @@ export default function ContactsPage() {
                 </Button>
               </div>
             </form>
+            )}
           </DialogContent>
         </Dialog>
       </div>

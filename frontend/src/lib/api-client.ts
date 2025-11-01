@@ -12,6 +12,7 @@ import type {
   Trader,
   Broker,
   Contact,
+  Deal,
   DashboardStats,
   PaginatedResponse,
   ApiResponse,
@@ -467,7 +468,6 @@ export const commoditiesApi = {
     page?: number
     page_size?: number
     search?: string
-    commodity_group?: number
   }): Promise<PaginatedResponse<Commodity>> => {
     const response = await apiClient.get('/commodities/', { params })
     return response.data
@@ -502,26 +502,128 @@ export const contactsApi = {
     status?: string
   }): Promise<Contact[]> => {
     const response = await apiClient.get('/contacts/', { params })
-    return response.data.results || response.data
+    const data = response.data.results || response.data
+    // Map backend contact to frontend Contact type (company from counterparty)
+    return data.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      company: c.company, // provided by serializer
+      position: c.position,
+      city: c.city,
+      country: c.country,
+      status: c.status,
+      source: c.source,
+      notes: c.notes,
+      created_at: c.created_at,
+      last_contact: c.last_contact,
+    }))
   },
 
   getById: async (id: number): Promise<Contact> => {
-    const response = await apiClient.get(`/contacts/${id}/`)
-    return response.data
+    const { data: c } = await apiClient.get(`/contacts/${id}/`)
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      company: c.company,
+      counterparty_id: c.counterparty_id,
+      position: c.position,
+      city: c.city,
+      country: c.country,
+      status: c.status,
+      source: c.source,
+      notes: c.notes,
+      created_at: c.created_at,
+      last_contact: c.last_contact,
+    }
   },
 
-  create: async (data: Omit<Contact, 'id' | 'created_at' | 'last_contact'>): Promise<Contact> => {
+  create: async (data: { counterparty: number } & Omit<Contact, 'id' | 'created_at' | 'last_contact' | 'company'>): Promise<Contact> => {
     const response = await apiClient.post('/contacts/', data)
-    return response.data
+    const c = response.data
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      company: c.company,
+      position: c.position,
+      city: c.city,
+      country: c.country,
+      status: c.status,
+      source: c.source,
+      notes: c.notes,
+      created_at: c.created_at,
+      last_contact: c.last_contact,
+    }
   },
 
-  update: async (id: number, data: Partial<Contact>): Promise<Contact> => {
-    const response = await apiClient.put(`/contacts/${id}/`, data)
-    return response.data
+  update: async (id: number, data: Partial<{ counterparty: number } & Omit<Contact, 'company'>>): Promise<Contact> => {
+    const response = await apiClient.patch(`/contacts/${id}/`, data)
+    const c = response.data
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      company: c.company,
+      position: c.position,
+      city: c.city,
+      country: c.country,
+      status: c.status,
+      source: c.source,
+      notes: c.notes,
+      created_at: c.created_at,
+      last_contact: c.last_contact,
+    }
   },
 
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(`/contacts/${id}/`)
+  },
+}
+
+// Deals API
+export const dealsApi = {
+  getAll: async (params?: {
+    page?: number
+    page_size?: number
+    search?: string
+    status?: string
+    trader?: number
+    counterparty?: number
+  }): Promise<PaginatedResponse<Deal>> => {
+    const response = await apiClient.get('/deals/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<Deal> => {
+    const response = await apiClient.get(`/deals/${id}/`)
+    return response.data
+  },
+
+  create: async (data: Omit<Deal, 'id' | 'deal_number' | 'created_at' | 'updated_at' | 'lines'> & { lines: Array<{ delivery_period_start: string; delivery_period_end: string; quantity: string }> }): Promise<Deal> => {
+    const response = await apiClient.post('/deals/', data)
+    return response.data
+  },
+
+  update: async (
+    id: number,
+    data: Partial<Deal> & { lines?: Array<{ delivery_period_start: string; delivery_period_end: string; quantity: string }> },
+    options?: { propagate?: boolean }
+  ): Promise<Deal> => {
+    const params: Record<string, any> = {}
+    if (options && options.propagate === false) params.propagate = 'false'
+    const response = await apiClient.patch(`/deals/${id}/`, data, { params })
+    return response.data
+  },
+
+  generateContracts: async (id: number): Promise<{ generated: number }> => {
+    const response = await apiClient.post(`/deals/${id}/generate_contracts/`)
+    return response.data
   },
 }
 
@@ -531,6 +633,17 @@ export const referenceDataApi = {
   getCurrencies: async (): Promise<Currency[]> => {
     const response = await apiClient.get('/currencies/')
     return response.data.results || response.data
+  },
+  createCurrency: async (data: Omit<Currency, 'id'>): Promise<Currency> => {
+    const response = await apiClient.post('/currencies/', data)
+    return response.data
+  },
+  updateCurrency: async (id: number, data: Partial<Currency>): Promise<Currency> => {
+    const response = await apiClient.put(`/currencies/${id}/`, data)
+    return response.data
+  },
+  deleteCurrency: async (id: number): Promise<void> => {
+    await apiClient.delete(`/currencies/${id}/`)
   },
 
   // Traders
@@ -550,11 +663,33 @@ export const referenceDataApi = {
     const response = await apiClient.get('/commodity-groups/')
     return response.data.results || response.data
   },
+  createCommodityGroup: async (data: { commodity_group_name: string; description?: string }): Promise<any> => {
+    const response = await apiClient.post('/commodity-groups/', data)
+    return response.data
+  },
+  updateCommodityGroup: async (id: number, data: Partial<{ commodity_group_name: string; description?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/commodity-groups/${id}/`, data)
+    return response.data
+  },
+  deleteCommodityGroup: async (id: number): Promise<void> => {
+    await apiClient.delete(`/commodity-groups/${id}/`)
+  },
 
   // Commodity Types
   getCommodityTypes: async () => {
     const response = await apiClient.get('/commodity-types/')
     return response.data.results || response.data
+  },
+  createCommodityType: async (data: { commodity_type_name: string; description?: string }): Promise<any> => {
+    const response = await apiClient.post('/commodity-types/', data)
+    return response.data
+  },
+  updateCommodityType: async (id: number, data: Partial<{ commodity_type_name: string; description?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/commodity-types/${id}/`, data)
+    return response.data
+  },
+  deleteCommodityType: async (id: number): Promise<void> => {
+    await apiClient.delete(`/commodity-types/${id}/`)
   },
 
   // Commodity Subtypes
@@ -562,11 +697,33 @@ export const referenceDataApi = {
     const response = await apiClient.get('/commodity-subtypes/')
     return response.data.results || response.data
   },
+  createCommoditySubtype: async (data: { commodity_subtype_name: string; description?: string }): Promise<any> => {
+    const response = await apiClient.post('/commodity-subtypes/', data)
+    return response.data
+  },
+  updateCommoditySubtype: async (id: number, data: Partial<{ commodity_subtype_name: string; description?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/commodity-subtypes/${id}/`, data)
+    return response.data
+  },
+  deleteCommoditySubtype: async (id: number): Promise<void> => {
+    await apiClient.delete(`/commodity-subtypes/${id}/`)
+  },
 
   // Cost Centers
   getCostCenters: async () => {
     const response = await apiClient.get('/cost-centers/')
     return response.data.results || response.data
+  },
+  createCostCenter: async (data: { cost_center_name: string; description?: string }): Promise<any> => {
+    const response = await apiClient.post('/cost-centers/', data)
+    return response.data
+  },
+  updateCostCenter: async (id: number, data: Partial<{ cost_center_name: string; description?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/cost-centers/${id}/`, data)
+    return response.data
+  },
+  deleteCostCenter: async (id: number): Promise<void> => {
+    await apiClient.delete(`/cost-centers/${id}/`)
   },
 
   // Delivery Formats
@@ -574,11 +731,33 @@ export const referenceDataApi = {
     const response = await apiClient.get('/delivery-formats/')
     return response.data.results || response.data
   },
+  createDeliveryFormat: async (data: { delivery_format_name: string; delivery_format_cost: string; description?: string }): Promise<any> => {
+    const response = await apiClient.post('/delivery-formats/', data)
+    return response.data
+  },
+  updateDeliveryFormat: async (id: number, data: Partial<{ delivery_format_name: string; delivery_format_cost: string; description?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/delivery-formats/${id}/`, data)
+    return response.data
+  },
+  deleteDeliveryFormat: async (id: number): Promise<void> => {
+    await apiClient.delete(`/delivery-formats/${id}/`)
+  },
 
   // Additives
   getAdditives: async () => {
     const response = await apiClient.get('/additives/')
     return response.data.results || response.data
+  },
+  createAdditive: async (data: { additive_name: string; additive_cost: string; description?: string }): Promise<any> => {
+    const response = await apiClient.post('/additives/', data)
+    return response.data
+  },
+  updateAdditive: async (id: number, data: Partial<{ additive_name: string; additive_cost: string; description?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/additives/${id}/`, data)
+    return response.data
+  },
+  deleteAdditive: async (id: number): Promise<void> => {
+    await apiClient.delete(`/additives/${id}/`)
   },
 
   // Sociedades
@@ -586,17 +765,50 @@ export const referenceDataApi = {
     const response = await apiClient.get('/sociedades/')
     return response.data.results || response.data
   },
+  createSociedad: async (data: { sociedad_name: string; tax_id?: string; address?: string }): Promise<any> => {
+    const response = await apiClient.post('/sociedades/', data)
+    return response.data
+  },
+  updateSociedad: async (id: number, data: Partial<{ sociedad_name: string; tax_id?: string; address?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/sociedades/${id}/`, data)
+    return response.data
+  },
+  deleteSociedad: async (id: number): Promise<void> => {
+    await apiClient.delete(`/sociedades/${id}/`)
+  },
 
   // Trade Operation Types
   getTradeOperationTypes: async () => {
     const response = await apiClient.get('/trade-operation-types/')
     return response.data.results || response.data
   },
+  createTradeOperationType: async (data: { trade_operation_type_name: string; operation_code?: string; description?: string; price_type?: 'FLAT' | 'UNPRICED' | 'FUTURES'; side?: 'BUY' | 'SELL' }): Promise<any> => {
+    const response = await apiClient.post('/trade-operation-types/', data)
+    return response.data
+  },
+  updateTradeOperationType: async (id: number, data: Partial<{ trade_operation_type_name: string; operation_code?: string; description?: string; price_type?: 'FLAT' | 'UNPRICED' | 'FUTURES'; side?: 'BUY' | 'SELL' }>): Promise<any> => {
+    const response = await apiClient.patch(`/trade-operation-types/${id}/`, data)
+    return response.data
+  },
+  deleteTradeOperationType: async (id: number): Promise<void> => {
+    await apiClient.delete(`/trade-operation-types/${id}/`)
+  },
 
   // ICOTERMS
   getIcoterms: async () => {
     const response = await apiClient.get('/icoterms/')
     return response.data.results || response.data
+  },
+  createIcoterm: async (data: { icoterm_code: string; icoterm_name: string; description?: string }): Promise<any> => {
+    const response = await apiClient.post('/icoterms/', data)
+    return response.data
+  },
+  updateIcoterm: async (id: number, data: Partial<{ icoterm_code: string; icoterm_name: string; description?: string }>): Promise<any> => {
+    const response = await apiClient.put(`/icoterms/${id}/`, data)
+    return response.data
+  },
+  deleteIcoterm: async (id: number): Promise<void> => {
+    await apiClient.delete(`/icoterms/${id}/`)
   },
 }
 
@@ -674,4 +886,3 @@ export default apiClient
 
 // Export utility functions  
 export { clearAuthState, clearCSRFTokenCache, getCSRFToken, hasNonHttpOnlyAuthCookies, waitForAuthentication }
-

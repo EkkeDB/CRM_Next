@@ -50,13 +50,23 @@ export default function CurrenciesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for currency CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Currency create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingCurrency) {
+        const updated = await referenceDataApi.updateCurrency(editingCurrency.id, {
+          currency_code: formData.currency_code,
+          currency_name: formData.currency_name,
+          currency_symbol: formData.currency_symbol,
+        } as any)
+        toast({ title: 'Success', description: 'Currency updated successfully' })
+      } else {
+        await referenceDataApi.createCurrency({
+          // @ts-expect-error allow partial for backend
+          currency_code: formData.currency_code,
+          currency_name: formData.currency_name,
+          currency_symbol: formData.currency_symbol,
+        } as any)
+        toast({ title: 'Success', description: 'Currency created successfully' })
+      }
+      await fetchData()
       setDialogOpen(false)
       setEditingCurrency(null)
       resetForm()
@@ -84,11 +94,9 @@ export default function CurrenciesPage() {
     if (!confirm('Are you sure you want to delete this currency?')) return
     
     try {
-      toast({
-        title: 'Info',
-        description: 'Currency delete API endpoint not yet implemented',
-        variant: 'default'
-      })
+      await referenceDataApi.deleteCurrency(id)
+      toast({ title: 'Success', description: 'Currency deleted successfully' })
+      await fetchData()
     } catch (error) {
       console.error('Error deleting currency:', error)
       toast({

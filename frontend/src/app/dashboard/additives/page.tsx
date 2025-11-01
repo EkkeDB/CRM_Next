@@ -23,10 +23,9 @@ export default function AdditivesPage() {
   const { toast } = useToast()
 
   const [formData, setFormData] = useState({
-    additive_code: '',
     additive_name: '',
-    description: '',
-    is_active: true
+    additive_cost: '',
+    description: ''
   })
 
   useEffect(() => {
@@ -53,13 +52,22 @@ export default function AdditivesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for additive CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Additive create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingAdditive) {
+        await referenceDataApi.updateAdditive(editingAdditive.id, {
+          additive_name: formData.additive_name,
+          additive_cost: formData.additive_cost,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'Additive updated successfully' })
+      } else {
+        await referenceDataApi.createAdditive({
+          additive_name: formData.additive_name,
+          additive_cost: formData.additive_cost,
+          description: formData.description,
+        })
+        toast({ title: 'Success', description: 'Additive created successfully' })
+      }
+      await fetchData()
       setDialogOpen(false)
       setEditingAdditive(null)
       resetForm()
@@ -76,10 +84,9 @@ export default function AdditivesPage() {
   const handleEdit = (additive: Additive) => {
     setEditingAdditive(additive)
     setFormData({
-      additive_code: additive.additive_code || '',
       additive_name: additive.additive_name,
-      description: additive.description,
-      is_active: additive.is_active
+      additive_cost: additive.additive_cost,
+      description: additive.description
     })
     setDialogOpen(true)
   }
@@ -88,11 +95,9 @@ export default function AdditivesPage() {
     if (!confirm('Are you sure you want to delete this additive?')) return
     
     try {
-      toast({
-        title: 'Info',
-        description: 'Additive delete API endpoint not yet implemented',
-        variant: 'default'
-      })
+      await referenceDataApi.deleteAdditive(id)
+      toast({ title: 'Success', description: 'Additive deleted successfully' })
+      await fetchData()
     } catch (error) {
       console.error('Error deleting additive:', error)
       toast({
@@ -104,11 +109,10 @@ export default function AdditivesPage() {
   }
 
   const resetForm = () => {
-    setFormData({ additive_code: '', additive_name: '', description: '', is_active: true })
+    setFormData({ additive_name: '', additive_cost: '', description: '' })
   }
 
   const filteredAdditives = additives.filter(additive =>
-    additive.additive_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     additive.additive_name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 

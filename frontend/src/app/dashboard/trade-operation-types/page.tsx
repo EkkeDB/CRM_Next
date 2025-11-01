@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Trash2, Shuffle, TrendingUp } from 'lucide-react'
@@ -24,7 +25,9 @@ export default function TradeOperationTypesPage() {
   const [formData, setFormData] = useState({
     trade_operation_type_name: '',
     operation_code: '',
-    description: ''
+    description: '',
+    price_type: 'FLAT' as 'FLAT' | 'UNPRICED' | 'FUTURES',
+    side: 'BUY' as 'BUY' | 'SELL',
   })
 
   useEffect(() => {
@@ -51,13 +54,26 @@ export default function TradeOperationTypesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Note: API endpoints for trade operation type CRUD may not be implemented yet
-      toast({
-        title: 'Info',
-        description: 'Trade operation type create/update API endpoints not yet implemented',
-        variant: 'default'
-      })
-      
+      if (editingOperationType) {
+        await referenceDataApi.updateTradeOperationType(editingOperationType.id, {
+          trade_operation_type_name: formData.trade_operation_type_name,
+          operation_code: formData.operation_code,
+          description: formData.description,
+          price_type: formData.price_type,
+          side: formData.side,
+        })
+        toast({ title: 'Success', description: 'Operation type updated successfully' })
+      } else {
+        await referenceDataApi.createTradeOperationType({
+          trade_operation_type_name: formData.trade_operation_type_name,
+          operation_code: formData.operation_code,
+          description: formData.description,
+          price_type: formData.price_type,
+          side: formData.side,
+        })
+        toast({ title: 'Success', description: 'Operation type created successfully' })
+      }
+      await fetchData()
       setDialogOpen(false)
       setEditingOperationType(null)
       resetForm()
@@ -76,7 +92,9 @@ export default function TradeOperationTypesPage() {
     setFormData({
       trade_operation_type_name: operationType.trade_operation_type_name,
       operation_code: operationType.operation_code,
-      description: operationType.description
+      description: operationType.description,
+      price_type: (operationType as any).price_type || 'FLAT',
+      side: (operationType as any).side || 'BUY',
     })
     setDialogOpen(true)
   }
@@ -85,11 +103,9 @@ export default function TradeOperationTypesPage() {
     if (!confirm('Are you sure you want to delete this trade operation type?')) return
     
     try {
-      toast({
-        title: 'Info',
-        description: 'Trade operation type delete API endpoint not yet implemented',
-        variant: 'default'
-      })
+      await referenceDataApi.deleteTradeOperationType(id)
+      toast({ title: 'Success', description: 'Operation type deleted successfully' })
+      await fetchData()
     } catch (error) {
       console.error('Error deleting trade operation type:', error)
       toast({
@@ -104,7 +120,9 @@ export default function TradeOperationTypesPage() {
     setFormData({
       trade_operation_type_name: '',
       operation_code: '',
-      description: ''
+      description: '',
+      price_type: 'FLAT',
+      side: 'BUY',
     })
   }
 
@@ -176,6 +194,33 @@ export default function TradeOperationTypesPage() {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Description of the trade operation type..."
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="price_type">Price Type</Label>
+                  <Select value={formData.price_type} onValueChange={(value) => setFormData({ ...formData, price_type: value as any })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FLAT">FLAT</SelectItem>
+                      <SelectItem value="UNPRICED">UNPRICED</SelectItem>
+                      <SelectItem value="FUTURES">FUTURES</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="side">Side</Label>
+                  <Select value={formData.side} onValueChange={(value) => setFormData({ ...formData, side: value as any })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BUY">BUY</SelectItem>
+                      <SelectItem value="SELL">SELL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="flex justify-end space-x-2 pt-4">
@@ -267,8 +312,9 @@ export default function TradeOperationTypesPage() {
               <TableRow>
                 <TableHead>Operation Name</TableHead>
                 <TableHead>Code</TableHead>
+                <TableHead>Price Type</TableHead>
+                <TableHead>Side</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>ID</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -288,15 +334,14 @@ export default function TradeOperationTypesPage() {
                   <TableCell>
                     <span className="font-mono text-sm">{operationType.operation_code || 'N/A'}</span>
                   </TableCell>
+                  <TableCell>{(operationType as any).price_type || 'FLAT'}</TableCell>
+                  <TableCell>{(operationType as any).side || 'BUY'}</TableCell>
                   <TableCell>
                     <div className="max-w-xs">
                       <p className="text-sm text-muted-foreground truncate">
                         {operationType.description || 'No description provided'}
                       </p>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">#{operationType.id}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
@@ -307,8 +352,6 @@ export default function TradeOperationTypesPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => handleDelete(operationType.id)}
-                        disabled
-                        title="Delete functionality not yet implemented"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
