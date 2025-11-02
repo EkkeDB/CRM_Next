@@ -156,7 +156,8 @@ export default function ContractsPage() {
         quantity: formData.quantity,
         unit_of_measure: 'MT', // Default value
         entrega: '',
-        delivery_period: '',
+        delivery_period_start: '',
+        delivery_period_end: '',
         date: formData.date,
         notes: formData.notes
       }
@@ -201,7 +202,9 @@ export default function ContractsPage() {
       date: contract.date,
       status: contract.status,
       trade_operation_type: contract.trade_operation_type.toString(),
-      notes: contract.notes || ''
+      notes: contract.notes || '',
+      delivery_period_start: (contract as any).delivery_period_start || (contract as any).delivery_period || '',
+      delivery_period_end: (contract as any).delivery_period_end || (contract as any).delivery_period || ''
     })
     setDialogOpen(true)
   }
@@ -238,7 +241,9 @@ export default function ContractsPage() {
       date: '',
       status: 'draft',
       trade_operation_type: '',
-      notes: ''
+      notes: '',
+      delivery_period_start: '',
+      delivery_period_end: ''
     })
   }
 

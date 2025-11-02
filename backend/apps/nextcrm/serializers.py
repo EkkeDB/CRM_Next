@@ -284,7 +284,8 @@ class ContractListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'contract_number', 'status', 'date', 'trader_name',
             'counterparty_name', 'commodity_name', 'quantity', 'price',
-            'trade_currency_code', 'total_value', 'delivery_period', 'deal', 'deal_number'
+            'trade_currency_code', 'total_value', 'delivery_period',
+            'delivery_period_start', 'delivery_period_end', 'deal', 'deal_number'
         ]
 
 
@@ -312,10 +313,21 @@ class ContractCreateSerializer(serializers.ModelSerializer):
         if data.get('payment_days', 0) < 0:
             errors['payment_days'] = 'Payment days cannot be negative'
         
-        # Validate delivery period is in the future
+        # Validate delivery period: accept start/end; fallback to legacy delivery_period
         from django.utils import timezone
-        if data.get('delivery_period') and data['delivery_period'] < timezone.now().date():
-            errors['delivery_period'] = 'Delivery period cannot be in the past'
+        dps = data.get('delivery_period_start')
+        dpe = data.get('delivery_period_end')
+        dp = data.get('delivery_period')
+        if dps or dpe:
+            if not (dps and dpe):
+                errors['delivery_period_start'] = 'Both delivery_period_start and delivery_period_end are required'
+            elif dps > dpe:
+                errors['delivery_period_start'] = 'Start cannot be after end'
+            elif dps < timezone.now().date():
+                errors['delivery_period_start'] = 'Delivery period cannot be in the past'
+        elif dp:
+            if dp < timezone.now().date():
+                errors['delivery_period'] = 'Delivery period cannot be in the past'
         
         if errors:
             raise serializers.ValidationError(errors)

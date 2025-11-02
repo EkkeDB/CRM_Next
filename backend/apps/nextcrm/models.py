@@ -497,6 +497,10 @@ class Contract(models.Model):
     
     # Delivery information
     entrega = models.CharField(max_length=200)  # Delivery point
+    # New delivery period range (start/end). Kept alongside legacy single date during transition.
+    delivery_period_start = models.DateField(null=True, blank=True)
+    delivery_period_end = models.DateField(null=True, blank=True)
+    # Legacy single-day period (to be deprecated once UI is fully migrated)
     delivery_period = models.DateField()
     
     # Contract dates
@@ -538,6 +542,15 @@ class Contract(models.Model):
                 new_number = seq.last_number
 
             self.contract_number = f"CONT-{year}-{new_number:06d}"
+
+        # Align start/end and legacy delivery_period during transition
+        if self.delivery_period_start and self.delivery_period_end:
+            # Prefer start/end — set legacy to start for compatibility
+            self.delivery_period = self.delivery_period_start
+        elif self.delivery_period and not (self.delivery_period_start and self.delivery_period_end):
+            # Backfill missing start/end from legacy
+            self.delivery_period_start = self.delivery_period
+            self.delivery_period_end = self.delivery_period
 
         super().save(*args, **kwargs)
     

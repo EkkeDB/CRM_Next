@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, Edit, Eye, Trash2, FileText, DollarSign, Calendar, Activity, ChevronRight, ChevronDown, Layers } from 'lucide-react'
+import { Plus, Search, Edit, Eye, Trash2, FileText, DollarSign, Calendar, Activity, ChevronRight, ChevronDown, Layers, Download, Upload } from 'lucide-react'
 import { contractsApi, counterpartiesApi, commoditiesApi, referenceDataApi, dealsApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import type { Contract, Counterparty, Commodity, Trader, Currency, TradeOperationType } from '@/types'
@@ -77,6 +77,49 @@ export default function ContractsPage() {
   const [editLoading, setEditLoading] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const { toast } = useToast()
+  // Contracts bulk ops (template + upload)
+  const contractsFileInputId = 'contracts-bulk-upload'
+  const [contractsUploading, setContractsUploading] = useState(false)
+  const [contractsDryRun, setContractsDryRun] = useState(false)
+
+  const downloadContractsTemplate = async () => {
+    try {
+      const blob = await contractsApi.downloadTemplate()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'contracts_template.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to download contracts template', variant: 'destructive' })
+    }
+  }
+
+  const onContractsFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setContractsUploading(true)
+      const res = await contractsApi.bulkUpload(file, { create_missing_deal: true, replace_materialized: false, dry_run: contractsDryRun })
+      const msg = `Created: ${res.created}, Updated: ${res.updated}, Errors: ${res.errors?.length || 0}`
+      toast({ title: res.dry_run ? 'Dry-run complete' : 'Contracts bulk upload complete', description: msg })
+      fetchData()
+    } catch (err: any) {
+      const d = err?.response?.data
+      let desc = 'Could not upload file'
+      if (d?.error) desc = String(d.error)
+      else if (typeof d === 'string') desc = d
+      else if (d && d.errors) desc = 'Validation failed for some rows'
+      else if (err?.message) desc = err.message
+      toast({ title: 'Contracts upload failed', description: desc, variant: 'destructive' })
+    } finally {
+      setContractsUploading(false)
+      e.target.value = ''
+    }
+  }
 
   // Async counterparty lookup for the select (server-side search + load more)
   const [cpQuery, setCpQuery] = useState('')
@@ -109,7 +152,8 @@ export default function ContractsPage() {
     payment_days: '30',
     unit_of_measure: 'MT',
     entrega: '',
-    delivery_period: '',
+    delivery_period_start: '',
+    delivery_period_end: '',
     notes: ''
   })
 
@@ -264,7 +308,8 @@ export default function ContractsPage() {
         quantity: formData.quantity,
         unit_of_measure: formData.unit_of_measure || 'MT',
         entrega: formData.entrega || '',
-        delivery_period: formData.delivery_period || '',
+        delivery_period_start: formData.delivery_period_start || '',
+        delivery_period_end: formData.delivery_period_end || '',
         date: formData.date,
         notes: formData.notes
       }
@@ -598,11 +643,24 @@ export default function ContractsPage() {
           </h1>
           <p className="text-gray-600 mt-2">Manage commodity trading contracts and workflows</p>
         </div>
-        {/* New Deal button */}
-        <Button onClick={() => { resetDealCreate(); setDealCreateOpen(true) }} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="mr-2 h-4 w-4" />
-          New Deal
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Contracts bulk ops */}
+          <label className="text-sm flex items-center gap-2">
+            <input type="checkbox" checked={contractsDryRun} onChange={(e) => setContractsDryRun(e.target.checked)} /> Dry run
+          </label>
+          <input id={contractsFileInputId} type="file" accept=".xlsx" onChange={onContractsFileChange} className="hidden" />
+          <Button variant="outline" onClick={downloadContractsTemplate}>
+            <Download className="h-4 w-4 mr-2" /> Contracts Template
+          </Button>
+          <Button variant="outline" onClick={() => document.getElementById(contractsFileInputId)?.click()} disabled={contractsUploading}>
+            <Upload className="h-4 w-4 mr-2" /> {contractsUploading ? 'Uploading...' : 'Contracts Bulk Upload'}
+          </Button>
+          {/* New Deal button */}
+          <Button onClick={() => { resetDealCreate(); setDealCreateOpen(true) }} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="mr-2 h-4 w-4" />
+            New Deal
+          </Button>
+        </div>
         {/* Contract edit dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -911,7 +969,7 @@ export default function ContractsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="entrega">Delivery Point</Label>
                   <Input
@@ -922,12 +980,21 @@ export default function ContractsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="delivery_period">Delivery Period</Label>
+                  <Label htmlFor="delivery_period_start">Delivery Start</Label>
                   <Input
-                    id="delivery_period"
+                    id="delivery_period_start"
                     type="date"
-                    value={formData.delivery_period}
-                    onChange={(e) => setFormData({ ...formData, delivery_period: e.target.value })}
+                    value={formData.delivery_period_start}
+                    onChange={(e) => setFormData({ ...formData, delivery_period_start: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="delivery_period_end">Delivery End</Label>
+                  <Input
+                    id="delivery_period_end"
+                    type="date"
+                    value={formData.delivery_period_end}
+                    onChange={(e) => setFormData({ ...formData, delivery_period_end: e.target.value })}
                   />
                 </div>
               </div>
@@ -1510,4 +1577,7 @@ export default function ContractsPage() {
     </div>
   )
 }
+
+
+
 

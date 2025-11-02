@@ -1,8 +1,8 @@
 {
+  "/dashboard/additives/page": "app/dashboard/additives/page.js",
+  "/dashboard/icoterms/page": "app/dashboard/icoterms/page.js",
   "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
-  "/dashboard/contacts/page": "app/dashboard/contacts/page.js",
-  "/dashboard/reports/page": "app/dashboard/reports/page.js",
-  "/dashboard/counterparties/factories/page": "app/dashboard/counterparties/factories/page.js",
+  "/dashboard/commodities/page": "app/dashboard/commodities/page.js",
   "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
-  "/dashboard/traders/page": "app/dashboard/traders/page.js"
+  "/dashboard/cost-centers/page": "app/dashboard/cost-centers/page.js"
 }

@@ -437,6 +437,23 @@ export const contractsApi = {
     const response = await apiClient.get('/contracts/dashboard_stats/')
     return response.data
   },
+  downloadTemplate: async (): Promise<Blob> => {
+    const response = await apiClient.get('/contracts/bulk_template/', { responseType: 'blob' as any })
+    return response.data as Blob
+  },
+  bulkUpload: async (file: File, opts?: { create_missing_deal?: boolean; replace_materialized?: boolean; dry_run?: boolean }): Promise<{ created: number; updated: number; errors: any[]; processed: number; dry_run?: boolean }> => {
+    const form = new FormData()
+    form.append('file', file)
+    const params: any = {}
+    if (opts?.create_missing_deal !== undefined) params.create_missing_deal = String(opts.create_missing_deal)
+    if (opts?.replace_materialized !== undefined) params.replace_materialized = String(opts.replace_materialized)
+    if (opts?.dry_run !== undefined) params.dry_run = String(opts.dry_run)
+    const response = await apiClient.post('/contracts/bulk_upload/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+    })
+    return response.data
+  },
 }
 
 // Counterparties API

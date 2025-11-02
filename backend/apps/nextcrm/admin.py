@@ -124,11 +124,11 @@ class TradeOperationTypeAdmin(admin.ModelAdmin):
 @admin.register(Contract)
 class ContractAdmin(admin.ModelAdmin):
     list_display = (
-        'contract_number', 'counterparty', 'commodity', 'quantity', 
-        'price', 'status', 'date', 'trader'
+        'contract_number', 'counterparty', 'commodity', 'quantity',
+        'price', 'status', 'date', 'delivery_period_start', 'delivery_period_end', 'trader'
     )
     list_filter = (
-        'status', 'date', 'trader', 'counterparty', 'trade_operation_type'
+        'status', 'date', 'delivery_period_start', 'delivery_period_end', 'trader', 'counterparty', 'trade_operation_type'
     )
     search_fields = (
         'contract_number', 'counterparty__counterparty_name',
@@ -158,7 +158,8 @@ class ContractAdmin(admin.ModelAdmin):
         }),
         ('Delivery & Operations', {
             'fields': (
-                'trade_operation_type', 'icoterm', 'entrega', 'delivery_period',
+                'trade_operation_type', 'icoterm', 'entrega',
+                'delivery_period_start', 'delivery_period_end', 'delivery_period',
                 'cost_center'
             )
         }),

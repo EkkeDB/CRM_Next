@@ -544,6 +544,463 @@ class ContractViewSet(viewsets.ModelViewSet):
             return ContractCreateSerializer
         return ContractSerializer
 
+    @action(detail=False, methods=['get'], url_path='bulk_template')
+    def bulk_template(self, request):
+        """Download an XLSX template for bulk contracts import.
+
+        One row = one Contract. Optional `deal_number` links a contract to an existing or new Deal header.
+        """
+        from openpyxl import Workbook
+        from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.datavalidation import DataValidation
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Contracts'
+        # Mark mandatory fields with '*', note (u) for unique key
+        headers = [
+            'deal_number*', 'contract_number (u)', 'trader*', 'trade_operation_type*', 'sociedad*',
+            'counterparty_code*', 'commodity*', 'delivery_format*', 'additive*', 'broker', 'icoterm*', 'cost_center*',
+            'broker_fee', 'broker_fee_currency', 'freight_cost*', 'forex*', 'price*', 'trade_currency*',
+            'payment_days*', 'quantity*', 'unit_of_measure*', 'entrega*',
+            'delivery_period_start*', 'delivery_period_end*', 'delivery_period',
+            'date*', 'status*', 'notes'
+        ]
+        ws.append(headers)
+        ws.freeze_panes = 'A2'
+        widths = [16, 20, 18, 20, 18, 24, 20, 18, 16, 16, 12, 16, 12, 12, 12, 10, 12, 12, 12, 12, 12, 18, 16, 16, 14, 12, 12, 24]
+        for idx, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(idx)].width = w
+
+        info = wb.create_sheet('README')
+        info.append(['Instructions'])
+        info.append(['- One row per contract; fields marked * are mandatory.'])
+        info.append(['- Use codes where available (counterparty_code, currency codes, icoterm codes) to reduce ambiguity.'])
+        info.append(['- Dates format: YYYY-MM-DD.'])
+        info.append(['- deal_number is mandatory; if the deal does not exist, it will be created.'])
+        info.append(['- delivery_period_start and end are mandatory; until migration, they must be equal.'])
+        info.append(['- If an existing DealLine already points to a contract, a new line will be appended (no overwrite).'])
+
+        # Build OPTIONS sheet with dropdown values for most FK fields (except counterparty)
+        from .models import (
+            Trader, Trade_Operation_Type, Sociedad, Commodity, Delivery_Format, Additive,
+            Broker, ICOTERM, Cost_Center, Currency, Contract
+        )
+        opt = wb.create_sheet('OPTIONS')
+        # Build unit_of_measure options from DB distincts with safe fallbacks
+        uom_set = set()
+        try:
+            uom_set.update([v for v in Commodity.objects.values_list('unit_of_measure', flat=True).distinct() if v])
+        except Exception:
+            pass
+        try:
+            uom_set.update([v for v in Contract.objects.values_list('unit_of_measure', flat=True).distinct() if v])
+        except Exception:
+            pass
+        # Ensure basic common units are present
+        uom_set.update(['MT', 'KG'])
+        uoms = sorted(uom_set)
+
+        option_defs = [
+            ('trader', [t.trader_name for t in Trader.objects.order_by('trader_name')]),
+            ('trade_operation_type', [o.trade_operation_type_name for o in Trade_Operation_Type.objects.order_by('trade_operation_type_name')]),
+            ('sociedad', [s.sociedad_name for s in Sociedad.objects.order_by('sociedad_name')]),
+            ('commodity', [c.commodity_name_short for c in Commodity.objects.order_by('commodity_name_short')]),
+            ('delivery_format', [d.delivery_format_name for d in Delivery_Format.objects.order_by('delivery_format_name')]),
+            ('additive', [a.additive_name for a in Additive.objects.order_by('additive_name')]),
+            ('broker', [b.broker_name for b in Broker.objects.order_by('broker_name')]),
+            ('icoterm', [i.icoterm_code for i in ICOTERM.objects.order_by('icoterm_code')]),
+            ('cost_center', [cc.cost_center_name for cc in Cost_Center.objects.order_by('cost_center_name')]),
+            ('currency', [c.currency_code for c in Currency.objects.order_by('currency_code')]),
+            ('status', [k for (k, _) in Contract.STATUS_CHOICES]),
+            ('unit_of_measure', uoms),
+        ]
+        # Write option columns
+        for col_idx, (name, values) in enumerate(option_defs, start=1):
+            opt.cell(row=1, column=col_idx, value=name)
+            for row_idx, val in enumerate(values, start=2):
+                opt.cell(row=row_idx, column=col_idx, value=val)
+        # Hide options sheet from users
+        opt.sheet_state = 'hidden'
+
+        # Map headers in Contracts sheet to fields and apply validations
+        header_cells = {ws.cell(row=1, column=i).value: i for i in range(1, ws.max_column + 1)}
+        field_to_header = {
+            'trader': 'trader*',
+            'trade_operation_type': 'trade_operation_type*',
+            'sociedad': 'sociedad*',
+            'commodity': 'commodity*',
+            'delivery_format': 'delivery_format*',
+            'additive': 'additive*',
+            'broker': 'broker',
+            'icoterm': 'icoterm*',
+            'cost_center': 'cost_center*',
+            'trade_currency': 'trade_currency*',
+            'broker_fee_currency': 'broker_fee_currency',
+            'status': 'status*',
+            'unit_of_measure': 'unit_of_measure*',
+        }
+        # Options lookup mapping
+        opt_col_for = {name: get_column_letter(idx) for idx, (name, _) in enumerate(option_defs, start=1)}
+        def apply_dropdown(field_name: str, opt_key: str | None = None):
+            header_text = field_to_header.get(field_name)
+            if not header_text or header_text not in header_cells:
+                return
+            main_col = get_column_letter(header_cells[header_text])
+            source_key = opt_key or (field_name if field_name in opt_col_for else None)
+            if not source_key or source_key not in opt_col_for:
+                return
+            src_col = opt_col_for[source_key]
+            # Determine last row in source (fallback to a large range)
+            # We’ll use rows 2..2000 for safety
+            formula = f"=OPTIONS!${src_col}$2:${src_col}$2000"
+            dv = DataValidation(type="list", formula1=formula, allow_blank=True)
+            ws.add_data_validation(dv)
+            dv.add(f"{main_col}2:{main_col}5000")
+
+        # Apply dropdowns
+        apply_dropdown('trader')
+        apply_dropdown('trade_operation_type')
+        apply_dropdown('sociedad')
+        apply_dropdown('commodity')
+        apply_dropdown('delivery_format')
+        apply_dropdown('additive')
+        apply_dropdown('broker')
+        apply_dropdown('icoterm')
+        apply_dropdown('cost_center')
+        apply_dropdown('trade_currency', opt_key='currency')
+        apply_dropdown('broker_fee_currency', opt_key='currency')
+        apply_dropdown('status')
+        apply_dropdown('unit_of_measure')
+
+        from io import BytesIO
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = 'attachment; filename="contracts_template.xlsx"'
+        return resp
+
+    @action(detail=False, methods=['post'], url_path='bulk_upload', parser_classes=[MultiPartParser])
+    def bulk_upload(self, request):
+        """Upload XLSX with contracts. Creates/updates Contracts, optionally links/creates Deals and DealLines.
+
+        Query params (optional):
+          - create_missing_deal: bool (default true)
+          - replace_materialized: bool (default false)
+          - dry_run: bool (default false) — validate and simulate without saving
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': 'file is required (multipart/form-data)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from openpyxl import load_workbook
+        try:
+            wb = load_workbook(file, read_only=True, data_only=True)
+        except Exception as e:
+            return Response({'error': f'Invalid XLSX file: {e}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return Response({'error': 'Empty worksheet'}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_header = [str(h).strip() if h is not None else '' for h in rows[0]]
+
+        import re
+        def norm_col(col: str) -> str:
+            s = (col or '').strip().lower()
+            s = re.sub(r"\s*\(.*?\)\s*", "", s)
+            s = re.sub(r"\s*\[.*?\]\s*", "", s)
+            s = s.replace(' ', '_')
+            s = s.replace('*', '')
+            synonyms = {
+                'trader_name': 'trader',
+                'counterparty_name': 'counterparty',
+                'counterparty_code': 'counterparty_code',
+                'commodity_name': 'commodity',
+                'commodity_name_short': 'commodity',
+                'currency': 'trade_currency',
+                'broker_fee_ccy': 'broker_fee_currency',
+                'delivery_start': 'delivery_period_start',
+                'delivery_end': 'delivery_period_end',
+            }
+            return synonyms.get(s, s)
+
+        header = [norm_col(h) for h in raw_header]
+
+        # Basic helpers to resolve related objects
+        from .models import (
+            Trader, Trade_Operation_Type, Sociedad, Counterparty, Commodity,
+            Delivery_Format, Additive, Broker, ICOTERM, Cost_Center, Currency,
+            Deal, DealLine
+        )
+
+        def get_currency(val):
+            if not val:
+                return None
+            code = str(val).strip().upper()
+            return Currency.objects.filter(currency_code__iexact=code).first()
+
+        def get_by_name(model, field, val):
+            if not val:
+                return None
+            return model.objects.filter(**{f"{field}__iexact": str(val).strip()}).first()
+
+        created, updated = 0, 0
+        errors = []
+        results = []
+
+        # Params
+        create_missing_deal = (request.query_params.get('create_missing_deal', 'true').lower() != 'false')
+        replace_materialized = (request.query_params.get('replace_materialized', 'false').lower() == 'true')
+        dry_run = (request.query_params.get('dry_run', 'false').lower() == 'true')
+
+        # Iterate rows
+        for idx, row in enumerate(rows[1:], start=2):
+            try:
+                if not row or all(c in (None, '') for c in row):
+                    continue
+                data = {header[i]: row[i] for i in range(min(len(header), len(row))) if header[i]}
+
+                # Normalize basic scalars
+                def val_s(v):
+                    return '' if v is None else str(v).strip()
+                def val_d(v):
+                    from decimal import Decimal
+                    if v in (None, ''):
+                        return None
+                    try:
+                        return Decimal(str(v))
+                    except Exception:
+                        return v
+
+                # Required core fields
+                trader = get_by_name(Trader, 'trader_name', data.get('trader'))
+                # Prefer code if provided, fallback to name (legacy)
+                cp_code = val_s(data.get('counterparty_code'))
+                counterparty = None
+                if cp_code:
+                    counterparty = Counterparty.objects.filter(counterparty_code__iexact=cp_code).first()
+                if not counterparty:
+                    counterparty = get_by_name(Counterparty, 'counterparty_name', data.get('counterparty')) or Counterparty.objects.filter(counterparty_code__iexact=val_s(data.get('counterparty'))).first()
+                commodity = get_by_name(Commodity, 'commodity_name_short', data.get('commodity')) or get_by_name(Commodity, 'commodity_name_full', data.get('commodity'))
+                trade_currency = get_currency(data.get('trade_currency'))
+                if not (trader and counterparty and commodity and trade_currency):
+                    errors.append({'row': idx, 'error': 'Missing or invalid trader/counterparty/commodity/trade_currency'})
+                    continue
+
+                # Optional relations
+                sociedad = get_by_name(Sociedad, 'sociedad_name', data.get('sociedad'))
+                tot = get_by_name(Trade_Operation_Type, 'trade_operation_type_name', data.get('trade_operation_type'))
+                delivery_format = get_by_name(Delivery_Format, 'delivery_format_name', data.get('delivery_format'))
+                additive = get_by_name(Additive, 'additive_name', data.get('additive'))
+                broker = get_by_name(Broker, 'broker_name', data.get('broker')) or Broker.objects.filter(broker_code__iexact=val_s(data.get('broker'))).first()
+                icoterm = get_by_name(ICOTERM, 'icoterm_name', data.get('icoterm')) or ICOTERM.objects.filter(icoterm_code__iexact=val_s(data.get('icoterm'))).first()
+                cost_center = get_by_name(Cost_Center, 'cost_center_name', data.get('cost_center'))
+
+                # Numerics
+                broker_fee = val_d(data.get('broker_fee')) or 0
+                broker_fee_currency = get_currency(data.get('broker_fee_currency')) or trade_currency
+                freight_cost = val_d(data.get('freight_cost'))
+                forex = val_d(data.get('forex'))
+                price = val_d(data.get('price'))
+                quantity = val_d(data.get('quantity'))
+
+                # Strings/dates
+                uom = val_s(data.get('unit_of_measure'))
+                entrega = val_s(data.get('entrega'))
+                from datetime import datetime
+                def parse_date(v):
+                    if not v:
+                        return None
+                    if hasattr(v, 'strftime'):
+                        return v
+                    try:
+                        return datetime.strptime(str(v).strip(), '%Y-%m-%d').date()
+                    except Exception:
+                        return None
+                dps = parse_date(data.get('delivery_period_start'))
+                dpe = parse_date(data.get('delivery_period_end'))
+                delivery_period = parse_date(data.get('delivery_period'))
+                # Enforce new start/end semantics: for now they must be present and equal; fallback to delivery_period for legacy
+                if dps or dpe:
+                    if not (dps and dpe):
+                        errors.append({'row': idx, 'error': 'Both delivery_period_start and delivery_period_end are required'})
+                        continue
+                    if dps != dpe:
+                        errors.append({'row': idx, 'error': 'delivery_period_start and delivery_period_end must be equal until migration'})
+                        continue
+                    delivery_period = dps
+                contract_date = parse_date(data.get('date'))
+                status_val = val_s(data.get('status')) or 'draft'
+                notes = val_s(data.get('notes'))
+
+                # Mandatory relations per specification
+                mandatory_missing = []
+                if not val_s(data.get('deal_number')):
+                    mandatory_missing.append('deal_number')
+                if not get_by_name(Trade_Operation_Type, 'trade_operation_type_name', data.get('trade_operation_type')):
+                    mandatory_missing.append('trade_operation_type')
+                if not get_by_name(Sociedad, 'sociedad_name', data.get('sociedad')):
+                    mandatory_missing.append('sociedad')
+                if not get_by_name(Delivery_Format, 'delivery_format_name', data.get('delivery_format')):
+                    mandatory_missing.append('delivery_format')
+                if not get_by_name(Additive, 'additive_name', data.get('additive')):
+                    mandatory_missing.append('additive')
+                if not (get_by_name(ICOTERM, 'icoterm_name', data.get('icoterm')) or ICOTERM.objects.filter(icoterm_code__iexact=val_s(data.get('icoterm'))).first()):
+                    mandatory_missing.append('icoterm')
+                if not get_by_name(Cost_Center, 'cost_center_name', data.get('cost_center')):
+                    mandatory_missing.append('cost_center')
+                if freight_cost is None:
+                    mandatory_missing.append('freight_cost')
+                if forex is None:
+                    mandatory_missing.append('forex')
+                if price is None:
+                    mandatory_missing.append('price')
+                if quantity is None:
+                    mandatory_missing.append('quantity')
+                if not uom:
+                    mandatory_missing.append('unit_of_measure')
+                if not entrega:
+                    mandatory_missing.append('entrega')
+                if not delivery_period:
+                    mandatory_missing.append('delivery_period')
+                if not contract_date:
+                    mandatory_missing.append('date')
+                if not val_s(data.get('status')):
+                    mandatory_missing.append('status')
+                if mandatory_missing:
+                    errors.append({'row': idx, 'error': f"Missing mandatory fields: {', '.join(mandatory_missing)}"})
+                    continue
+
+                # Find or create Contract by contract_number
+                contract_number = val_s(data.get('contract_number'))
+                contract = None
+                if contract_number:
+                    contract = Contract.objects.filter(contract_number__iexact=contract_number).first()
+
+                payload = {
+                    'trader': trader,
+                    'trade_operation_type': tot,
+                    'sociedad': sociedad,
+                    'counterparty': counterparty,
+                    'commodity': commodity,
+                    'delivery_format': delivery_format,
+                    'additive': additive,
+                    'broker': broker,
+                    'icoterm': icoterm,
+                    'cost_center': cost_center,
+                    'broker_fee': broker_fee,
+                    'broker_fee_currency': broker_fee_currency,
+                    'freight_cost': freight_cost,
+                    'forex': forex,
+                    'price': price,
+                    'trade_currency': trade_currency,
+                    'payment_days': int(val_s(data.get('payment_days')) or '0') or 0,
+                    'quantity': quantity,
+                    'unit_of_measure': uom,
+                    'entrega': entrega,
+                    'delivery_period': delivery_period,
+                    'delivery_period_start': delivery_period,
+                    'delivery_period_end': delivery_period,
+                    'date': contract_date,
+                    'status': status_val if status_val in dict(Contract.STATUS_CHOICES) else 'draft',
+                    'notes': notes,
+                }
+
+                # Save contract
+                op = 'created'
+                if contract:
+                    for k, v in payload.items():
+                        setattr(contract, k, v)
+                    if contract_number:
+                        contract.contract_number = contract_number
+                    if not dry_run:
+                        contract.save()
+                    updated += 1
+                    op = 'updated'
+                else:
+                    contract = Contract(**payload)
+                    if contract_number:
+                        contract.contract_number = contract_number
+                    if not dry_run:
+                        contract.save()
+                    created += 1
+
+                # Deal linkage
+                deal_number = val_s(data.get('deal_number'))
+                if deal_number:
+                    deal = Deal.objects.filter(deal_number__iexact=deal_number).first()
+                    if not deal and create_missing_deal:
+                        # Build minimal Deal header from row
+                        deal = Deal(
+                            deal_number=deal_number,
+                            trader=trader,
+                            counterparty=counterparty,
+                            commodity=commodity,
+                            price=price,
+                            trade_currency=trade_currency,
+                            payment_days=payload['payment_days'],
+                            unit_of_measure=uom,
+                            broker_fee=broker_fee,
+                            broker_fee_currency=broker_fee_currency,
+                            freight_cost=freight_cost,
+                            forex=forex,
+                            date=contract_date,
+                            status=status_val,
+                            sociedad=sociedad,
+                            trade_operation_type=tot,
+                            delivery_format=delivery_format,
+                            additive=additive,
+                            broker=broker,
+                            icoterm=icoterm,
+                            cost_center=cost_center,
+                            notes=notes,
+                        )
+                        if not dry_run:
+                            deal.save()
+                    if deal:
+                        # Attach contract to deal
+                        if not dry_run:
+                            contract.deal = deal
+                            contract.save(update_fields=['deal'])
+
+                        # DealLine linking
+                        line = DealLine.objects.filter(deal=deal, delivery_period_start=delivery_period, delivery_period_end=delivery_period).first()
+                        if line and line.materialized_contract and line.materialized_contract_id != contract.id:
+                            if replace_materialized:
+                                if not dry_run:
+                                    line.materialized_contract = contract
+                                    line.sync_status = 'synced'
+                                    line.save(update_fields=['materialized_contract', 'sync_status'])
+                            else:
+                                # Append new line for this period
+                                if not dry_run:
+                                    line = DealLine.objects.create(deal=deal, delivery_period_start=delivery_period, delivery_period_end=delivery_period, materialized_contract=contract, sync_status='synced')
+                        elif line:
+                            # Link if empty
+                            if not line.materialized_contract_id:
+                                if not dry_run:
+                                    line.materialized_contract = contract
+                                    line.sync_status = 'synced'
+                                    line.save(update_fields=['materialized_contract', 'sync_status'])
+                        else:
+                            if not dry_run:
+                                DealLine.objects.create(deal=deal, delivery_period_start=delivery_period, delivery_period_end=delivery_period, materialized_contract=contract, sync_status='synced')
+
+                results.append({'row': idx, 'id': contract.id, 'status': op})
+            except Exception as e:
+                errors.append({'row': idx, 'error': f'Unexpected error: {e}'})
+
+        return Response({
+            'created': created,
+            'updated': updated,
+            'errors': errors,
+            'processed': created + updated + len(errors),
+            'dry_run': dry_run,
+        })
+
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
@@ -747,6 +1204,8 @@ class DealViewSet(viewsets.ModelViewSet):
                     unit_of_measure=deal.unit_of_measure,
                     entrega=deal.entrega,
                     delivery_period=line.delivery_period_start,
+                    delivery_period_start=line.delivery_period_start,
+                    delivery_period_end=line.delivery_period_end,
                     date=deal.date,
                     status=deal.status,
                     notes=deal.notes,
@@ -890,3 +1349,4 @@ class CounterpartyNoteViewSet(viewsets.ModelViewSet):
             serializer.save()
         except ValidationError as e:
             raise e
+

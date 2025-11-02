@@ -11,45 +11,40 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/layout.js"
     ],
-    "/dashboard/counterparties/factories/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/counterparties/factories/page.js"
-    ],
     "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/page.js"
-    ],
-    "/dashboard/contacts/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/contacts/page.js"
-    ],
-    "/dashboard/counterparties/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/counterparties/page.js"
     ],
     "/dashboard/contracts/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/contracts/page.js"
     ],
-    "/page": [
+    "/dashboard/counterparties/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+      "static/chunks/app/dashboard/counterparties/page.js"
     ],
-    "/dashboard/reports/page": [
+    "/dashboard/commodities/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/reports/page.js"
+      "static/chunks/app/dashboard/commodities/page.js"
     ],
-    "/dashboard/traders/page": [
+    "/dashboard/additives/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/traders/page.js"
+      "static/chunks/app/dashboard/additives/page.js"
+    ],
+    "/dashboard/icoterms/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/icoterms/page.js"
+    ],
+    "/dashboard/cost-centers/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/cost-centers/page.js"
     ]
   }
 }
