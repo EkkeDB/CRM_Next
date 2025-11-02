@@ -7,7 +7,7 @@ from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
-    Contract, Counterparty_Facility, Trade_Setting
+    Contract, Counterparty_Facility, Trade_Setting, FacilityEnrichmentRun
 )
 
 
@@ -171,10 +171,28 @@ class ContractAdmin(admin.ModelAdmin):
 
 @admin.register(Counterparty_Facility)
 class CounterpartyFacilityAdmin(admin.ModelAdmin):
-    list_display = ('counterparty', 'counterparty_facility_name', 'facility_type', 'city', 'country')
-    list_filter = ('facility_type', 'country', 'is_active')
-    search_fields = ('counterparty_facility_name', 'counterparty__counterparty_name')
+    list_display = (
+        'counterparty', 'counterparty_facility_name', 'facility_type',
+        'city', 'province', 'region', 'country', 'latitude', 'longitude', 'is_active'
+    )
+    list_filter = ('facility_type', 'country', 'province', 'region', 'segment', 'is_active')
+    search_fields = ('counterparty_facility_name', 'counterparty__counterparty_name', 'city', 'province', 'region')
     ordering = ('counterparty__counterparty_name', 'counterparty_facility_name')
+
+
+@admin.register(FacilityEnrichmentRun)
+class FacilityEnrichmentRunAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'started_at', 'finished_at', 'status', 'countries',
+        'processed', 'updated', 'skipped', 'failures', 'dry_run', 'force'
+    )
+    list_filter = ('status', 'dry_run', 'force', 'started_at')
+    search_fields = ('countries',)
+    readonly_fields = (
+        'started_at', 'finished_at', 'status', 'countries', 'limit', 'chunk_size', 'sleep_seconds',
+        'resume_from_id', 'dry_run', 'force', 'processed', 'updated', 'skipped', 'failures',
+        'failed_samples'
+    )
 
 
 @admin.register(Trade_Setting)

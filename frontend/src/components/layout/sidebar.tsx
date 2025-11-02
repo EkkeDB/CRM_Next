@@ -43,6 +43,7 @@ const menuSections = [
     items: [
       { href: '/dashboard/contracts', label: 'Contracts', icon: FileText },
       { href: '/dashboard/counterparties', label: 'Counterparties', icon: Building },
+      { href: '/dashboard/counterparties/factories', label: 'Factories', icon: Building2 },
       { href: '/dashboard/traders', label: 'Traders', icon: Users },
       { href: '/dashboard/contacts', label: 'Contacts', icon: Contact },
     ]

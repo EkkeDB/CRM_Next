@@ -125,9 +125,46 @@ export interface CounterpartyFacility {
   address: string
   city: string
   country: string
+  province?: string
+  region?: string
+  segment?: FacilitySegment | ''
+  latitude?: number | null
+  longitude?: number | null
   created_at: string
   updated_at: string
   is_active: boolean
+}
+
+export type FacilitySegment =
+  | 'BAKERY'
+  | 'PASTRY'
+  | 'CANNED_FOOD'
+  | 'BOTTLERS'
+  | 'MERCHANTS'
+  | 'TECHNICAL'
+  | 'SNACKS'
+  | 'FEED'
+  | 'BIODIESEL'
+  | 'SAUCES_DRESSINGS'
+  | 'FROZEN_FOODS'
+  | 'COSMETICS'
+  | 'OLEOCHEMICALS'
+
+export interface FacilityConsumption {
+  id: number
+  facility: number
+  commodity: number
+  commodity_name?: string
+  monthly_volume: string
+  yearly_volume: string | null
+}
+
+export interface CounterpartyNote {
+  id: number
+  counterparty: number
+  content: string
+  created_at: string
+  updated_at: string
 }
 
 export interface Counterparty {

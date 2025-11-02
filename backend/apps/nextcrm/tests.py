@@ -10,7 +10,7 @@ from rest_framework import status
 from apps.nextcrm.models import (
     Currency, Trader, Counterparty, Commodity_Group, 
     Commodity_Type, Commodity_Subtype, Commodity, 
-    Trade_Operation_Type, Contract, Contact, Deal, DealLine
+    Trade_Operation_Type, Contract, Contact, Deal, DealLine, Counterparty_Facility
 )
 
 
@@ -312,6 +312,70 @@ class ContactAPITestCase(TestCase):
         delete_resp = self.client.delete(f'/api/contacts/{contact_id}/')
         self.assertEqual(delete_resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(self.client.get(f'/api/contacts/{contact_id}/').status_code, status.HTTP_404_NOT_FOUND)
+
+
+class FacilityConsumptionAPITestCase(TestCase):
+    """Test Facility and Consumption API endpoints"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='testpass123'
+        )
+        self.client.force_authenticate(user=self.user)
+
+        # Create counterparty and commodity
+        self.counterparty = Counterparty.objects.create(
+            counterparty_name='Gamma Foods',
+            is_supplier=True,
+            is_customer=True,
+        )
+        group = Commodity_Group.objects.create(commodity_group_name='Oils', description='')
+        ctype = Commodity_Type.objects.create(commodity_type_name='Vegetable', description='')
+        subtype = Commodity_Subtype.objects.create(commodity_subtype_name='Sunflower', description='')
+        self.commodity = Commodity.objects.create(
+            commodity_name_short='Sunflower Oil',
+            commodity_name_full='Sunflower Oil',
+            unit_of_measure='MT',
+            commodity_group=group,
+            commodity_type=ctype,
+            commodity_subtype=subtype,
+        )
+
+    def test_facility_and_consumption_crud(self):
+        # Create facility
+        fac_payload = {
+            'counterparty': self.counterparty.id,
+            'counterparty_facility_name': 'Plant A',
+            'facility_type': 'Refinery',
+            'address': '123 Street',
+            'city': 'City',
+            'country': 'Country',
+            'segment': 'BIODIESEL',
+            'latitude': 10.123456,
+            'longitude': 20.654321,
+        }
+        fac_resp = self.client.post('/api/counterparty-facilities/', fac_payload, format='json')
+        self.assertEqual(fac_resp.status_code, status.HTTP_201_CREATED)
+        facility_id = fac_resp.data['id']
+
+        # Create consumption
+        cons_payload = {
+            'facility': facility_id,
+            'commodity': self.commodity.id,
+            'monthly_volume': '100.000'
+        }
+        cons_resp = self.client.post('/api/facility-consumptions/', cons_payload, format='json')
+        self.assertEqual(cons_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(cons_resp.data.get('yearly_volume'), '1200.000')
+
+        # List by facility
+        list_resp = self.client.get('/api/facility-consumptions/', {'facility': facility_id})
+        self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
+        data = list_resp.data['results'] if 'results' in list_resp.data else list_resp.data
+        self.assertTrue(any(row['commodity'] == self.commodity.id for row in data))
 
 
 class DealAPITestCase(TestCase):

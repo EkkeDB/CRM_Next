@@ -11,7 +11,8 @@ from .views import (
     BrokerViewSet, ICOTERMViewSet, DeliveryFormatViewSet,
     AdditiveViewSet, SociedadViewSet, TradeOperationTypeViewSet,
     ContractViewSet, TradeSettingViewSet, ContactViewSet,
-    DealViewSet, DealLineViewSet
+    DealViewSet, DealLineViewSet, FacilityConsumptionViewSet, GeocodeView,
+    CounterpartyNoteViewSet
 )
 
 router = DefaultRouter()
@@ -26,6 +27,7 @@ router.register(r'commodity-subtypes', CommoditySubtypeViewSet)
 router.register(r'commodities', CommodityViewSet)
 router.register(r'counterparties', CounterpartyViewSet)
 router.register(r'counterparty-facilities', CounterpartyFacilityViewSet)
+router.register(r'facility-consumptions', FacilityConsumptionViewSet)
 router.register(r'brokers', BrokerViewSet)
 router.register(r'icoterms', ICOTERMViewSet)
 router.register(r'delivery-formats', DeliveryFormatViewSet)
@@ -37,7 +39,9 @@ router.register(r'contracts', ContractViewSet)
 router.register(r'contacts', ContactViewSet)
 router.register(r'deals', DealViewSet)
 router.register(r'deal-lines', DealLineViewSet)
+router.register(r'counterparty-notes', CounterpartyNoteViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('geocode/', GeocodeView.as_view(), name='geocode'),
 ]

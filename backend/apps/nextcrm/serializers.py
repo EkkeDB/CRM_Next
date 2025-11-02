@@ -3,13 +3,15 @@ Django REST Framework serializers for NextCRM models.
 """
 
 import json
+from decimal import Decimal
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
     Contract, Counterparty_Facility, Trade_Setting, Contact,
-    Deal, DealLine
+    Deal, DealLine, FacilityConsumption, Counterparty_Note
 )
 
 
@@ -60,9 +62,89 @@ class CommoditySerializer(serializers.ModelSerializer):
 
 
 class CounterpartyFacilitySerializer(serializers.ModelSerializer):
+    # Allow blank/optional for segment and nullable lat/lng
+    segment = serializers.ChoiceField(
+        choices=Counterparty_Facility.SEGMENT_CHOICES,
+        required=False,
+        allow_blank=True,
+    )
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+
     class Meta:
         model = Counterparty_Facility
         fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+        extra_kwargs = {
+            'counterparty_facility_name': {'required': True},
+            'counterparty': {'required': True},
+        }
+
+    def validate_segment(self, value):
+        # Coerce None to '' (DB stores empty string when unset)
+        if value is None:
+            return ''
+        return value
+
+    def validate_counterparty_facility_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Facility name is required')
+        return value.strip()
+
+    def validate(self, attrs):
+        # Normalize whitespace for address fields
+        for key in ['address', 'city', 'country', 'facility_type']:
+            if key in attrs and isinstance(attrs[key], str):
+                attrs[key] = attrs[key].strip()
+        return attrs
+
+    def validate_latitude(self, value):
+        if value is None:
+            return value
+        # Range check
+        if value < Decimal('-90') or value > Decimal('90'):
+            raise serializers.ValidationError('Latitude must be between -90 and 90')
+        # Quantize to 6 decimal places
+        return value.quantize(Decimal('0.000001'))
+
+    def validate_longitude(self, value):
+        if value is None:
+            return value
+        if value < Decimal('-180') or value > Decimal('180'):
+            raise serializers.ValidationError('Longitude must be between -180 and 180')
+        return value.quantize(Decimal('0.000001'))
+
+
+class FacilityConsumptionSerializer(serializers.ModelSerializer):
+    commodity_name = serializers.CharField(source='commodity.commodity_name_short', read_only=True)
+
+    class Meta:
+        model = FacilityConsumption
+        fields = ['id', 'facility', 'commodity', 'commodity_name', 'monthly_volume', 'yearly_volume']
+        read_only_fields = ['id', 'yearly_volume']
+        validators = [
+            UniqueTogetherValidator(
+                queryset=FacilityConsumption.objects.all(),
+                fields=['facility', 'commodity'],
+                message='This commodity already has a consumption record for this facility.'
+            )
+        ]
+
+    def validate_monthly_volume(self, value):
+        # Ensure monthly volume is a whole number within reasonable bounds
+        from decimal import Decimal
+        if value is None:
+            raise serializers.ValidationError('Monthly volume is required')
+        if value < 1 or value > 5000:
+            raise serializers.ValidationError('Monthly volume must be between 1 and 5000')
+        # Check if value has no fractional part
+        if (value % Decimal('1')) != 0:
+            raise serializers.ValidationError('Monthly volume must be a whole number (no decimals)')
+        return value
+
+
+class CounterpartyFacilityDetailSerializer(CounterpartyFacilitySerializer):
+    consumptions = FacilityConsumptionSerializer(many=True, read_only=True)
 
 
 class CounterpartySerializer(serializers.ModelSerializer):
@@ -396,3 +478,15 @@ class ContactSerializer(serializers.ModelSerializer):
             'counterparty', 'company', 'counterparty_id'
         ]
         read_only_fields = ['id', 'created_at', 'company']
+
+
+class CounterpartyNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Counterparty_Note
+        fields = ['id', 'counterparty', 'content', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_content(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Note content cannot be empty')
+        return value.strip()

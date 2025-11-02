@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, Edit, Eye, Trash2, Building, Users, MapPin, Mail, Phone } from 'lucide-react'
+import { Plus, Search, Edit, Eye, Trash2, Building, Users, MapPin, Mail, Phone, Download, Upload, Copy, X } from 'lucide-react'
 import { counterpartiesApi } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
@@ -34,6 +35,9 @@ export default function CounterpartiesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [counterpartyToDelete, setCounterpartyToDelete] = useState<{ id: number; name: string } | null>(null)
   const { toast } = useToast()
+  const [uploading, setUploading] = useState(false)
+  const fileInputId = 'cp-bulk-upload'
+  const [errorDetails, setErrorDetails] = useState('')
 
   const [formData, setFormData] = useState({
     counterparty_name: '',
@@ -188,6 +192,65 @@ export default function CounterpartiesPage() {
     }
   }
 
+  const downloadTemplate = async () => {
+    try {
+      const blob = await counterpartiesApi.downloadTemplate()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'counterparties_template.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to download template', variant: 'destructive' })
+    }
+  }
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setUploading(true)
+      const res = await counterpartiesApi.bulkUpload(file)
+      const msg = `Created: ${res.created}, Updated: ${res.updated}, Errors: ${res.errors?.length || 0}`
+      toast({ title: 'Bulk upload complete', description: msg })
+      if (res.errors && res.errors.length) {
+        // Show a brief preview of the first few errors
+        const preview = res.errors.slice(0, 5).map((er: any) => `Row ${er.row}: ${typeof er.error === 'string' ? er.error : JSON.stringify(er.error)}`).join(' | ')
+        console.warn('Bulk upload errors:', res.errors)
+        if (preview) toast({ title: 'Some rows failed', description: preview, variant: 'destructive' })
+        // Persist full error details for copying
+        setErrorDetails(JSON.stringify(res.errors, null, 2))
+      } else {
+        setErrorDetails('')
+      }
+      fetchData()
+    } catch (e: any) {
+      const d = e?.response?.data
+      let desc = 'Could not upload file'
+      if (d?.error) desc = String(d.error)
+      else if (typeof d === 'string') desc = d
+      else if (d && d.errors) {
+        const preview = d.errors.slice(0, 5).map((er: any) => `Row ${er.row}: ${typeof er.error === 'string' ? er.error : JSON.stringify(er.error)}`).join(' | ')
+        desc = preview || 'Validation failed for some rows'
+        setErrorDetails(JSON.stringify(d.errors, null, 2))
+      } else if (e?.message) {
+        desc = e.message
+      }
+      toast({ title: 'Upload failed', description: desc, variant: 'destructive' })
+      if (!errorDetails) {
+        // Keep at least the desc visible
+        setErrorDetails(desc)
+      }
+    } finally {
+      setUploading(false)
+      // Reset input so the same file can be selected again if needed
+      e.target.value = ''
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       counterparty_name: '',
@@ -266,6 +329,15 @@ export default function CounterpartiesPage() {
             Counterparties
           </h1>
           <p className="text-gray-600 mt-2">Manage customers and suppliers</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input id={fileInputId} type="file" accept=".xlsx" onChange={onFileChange} className="hidden" />
+          <Button variant="outline" onClick={downloadTemplate}>
+            <Download className="h-4 w-4 mr-2" /> Template
+          </Button>
+          <Button variant="outline" onClick={() => document.getElementById(fileInputId)?.click()} disabled={uploading}>
+            <Upload className="h-4 w-4 mr-2" /> {uploading ? 'Uploading...' : 'Bulk Upload'}
+          </Button>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -430,6 +502,22 @@ export default function CounterpartiesPage() {
       </div>
 
       {/* Filters and Search */}
+      {errorDetails && (
+        <div className="mb-4 border border-red-300 bg-red-50 dark:bg-red-950 rounded p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-medium text-red-700 dark:text-red-300">Upload Errors</div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(errorDetails) } catch {} }}>
+                <Copy className="h-4 w-4 mr-1" /> Copy
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setErrorDetails('')}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <pre className="whitespace-pre-wrap break-words select-text text-sm text-red-800 dark:text-red-200 max-h-64 overflow-auto">{errorDetails}</pre>
+        </div>
+      )}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-lg">Filters</CardTitle>
@@ -490,7 +578,11 @@ export default function CounterpartiesPage() {
                 <TableRow key={counterparty.id}>
                   <TableCell>
                     <div>
-                      <div className="font-medium">{counterparty.counterparty_name}</div>
+                      <div className="font-medium">
+                        <Link href={`/dashboard/customers/${counterparty.id}`} className="text-blue-600 hover:underline">
+                          {counterparty.counterparty_name}
+                        </Link>
+                      </div>
                       {counterparty.counterparty_code && (
                         <div className="text-sm text-muted-foreground">
                           Code: {counterparty.counterparty_code}
@@ -551,6 +643,11 @@ export default function CounterpartiesPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
+                      <Link href={`/dashboard/customers/${counterparty.id}`} title="View details">
+                        <Button variant="outline" size="sm" disabled={loading}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Link>
                       <Button variant="outline" size="sm" onClick={() => handleEdit(counterparty)} disabled={loading}>
                         <Edit className="h-4 w-4" />
                       </Button>

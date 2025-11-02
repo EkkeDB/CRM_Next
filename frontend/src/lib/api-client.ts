@@ -16,6 +16,9 @@ import type {
   DashboardStats,
   PaginatedResponse,
   ApiResponse,
+  CounterpartyFacility,
+  FacilityConsumption,
+  CounterpartyNote,
 } from '@/types'
 
 // API Configuration
@@ -107,8 +110,12 @@ const getCSRFToken = async (): Promise<string> => {
       // Failed response
       csrfState.promise = null
       csrfState.failureCount++
-      
-      console.error('Failed to get CSRF token:', error.response?.status, error.message)
+      // Reduce noise for common, expected cases during startup
+      if (error?.response?.status === 401 || !error?.response || error?.code === 'ECONNABORTED') {
+        console.warn('CSRF token fetch warning:', error.response?.status || error?.code || 'network')
+      } else {
+        console.error('Failed to get CSRF token:', error.response?.status, error.message)
+      }
       
       // Open circuit breaker if too many failures
       if (csrfState.failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
@@ -333,7 +340,11 @@ export const authApi = {
       const response = await apiClient.get('/auth/me/')
       return response.data
     } catch (error: any) {
-      console.error('Get profile API error:', error.response?.status, error.message)
+      if (error?.response?.status === 401) {
+        console.warn('Profile unauthenticated (401)')
+      } else {
+        console.error('Get profile API error:', error.response?.status, error.message)
+      }
       throw error
     }
   },
@@ -460,6 +471,20 @@ export const counterpartiesApi = {
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(`/counterparties/${id}/`)
   },
+
+  downloadTemplate: async (): Promise<Blob> => {
+    const response = await apiClient.get('/counterparties/bulk_template/', { responseType: 'blob' as any })
+    return response.data as Blob
+  },
+
+  bulkUpload: async (file: File): Promise<{ created: number; updated: number; errors: any[]; processed: number }> => {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await apiClient.post('/counterparties/bulk_upload/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
 }
 
 // Commodities API
@@ -500,6 +525,7 @@ export const contactsApi = {
     page_size?: number
     search?: string
     status?: string
+    counterparty?: number
   }): Promise<Contact[]> => {
     const response = await apiClient.get('/contacts/', { params })
     const data = response.data.results || response.data
@@ -583,6 +609,85 @@ export const contactsApi = {
 
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(`/contacts/${id}/`)
+  },
+}
+
+// Facilities API
+export const facilitiesApi = {
+  getAll: async (params?: { page?: number; page_size?: number; counterparty?: number; search?: string; segment?: string; city?: string; country?: string; province?: string; region?: string; is_active?: boolean }): Promise<PaginatedResponse<CounterpartyFacility>> => {
+    const response = await apiClient.get('/counterparty-facilities/', { params })
+    return response.data
+  },
+
+  getById: async (id: number): Promise<CounterpartyFacility & { consumptions?: FacilityConsumption[] }> => {
+    const response = await apiClient.get(`/counterparty-facilities/${id}/`)
+    return response.data
+  },
+
+  create: async (data: Omit<CounterpartyFacility, 'id' | 'created_at' | 'updated_at' | 'is_active'> & { is_active?: boolean }): Promise<CounterpartyFacility> => {
+    const response = await apiClient.post('/counterparty-facilities/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<CounterpartyFacility>): Promise<CounterpartyFacility> => {
+    const response = await apiClient.patch(`/counterparty-facilities/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/counterparty-facilities/${id}/`)
+  },
+}
+
+// Facility Consumptions API
+export const facilityConsumptionsApi = {
+  getByFacility: async (facilityId: number): Promise<FacilityConsumption[]> => {
+    const response = await apiClient.get('/facility-consumptions/', { params: { facility: facilityId, page_size: 1000 } })
+    return response.data.results || response.data
+  },
+
+  create: async (data: Omit<FacilityConsumption, 'id' | 'commodity_name' | 'yearly_volume'>): Promise<FacilityConsumption> => {
+    const response = await apiClient.post('/facility-consumptions/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<Omit<FacilityConsumption, 'id' | 'facility' | 'commodity' | 'commodity_name'>>): Promise<FacilityConsumption> => {
+    const response = await apiClient.patch(`/facility-consumptions/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/facility-consumptions/${id}/`)
+  },
+}
+
+// Utilities API
+export const utilsApi = {
+  geocode: async (query: string): Promise<{ lat: number; lng: number; provider: string; region?: string | null; province?: string | null; country_code?: string | null }> => {
+    const response = await apiClient.get('/geocode/', { params: { q: query } })
+    return response.data
+  },
+}
+
+// Counterparty Notes API
+export const counterpartyNotesApi = {
+  getByCounterparty: async (counterpartyId: number): Promise<CounterpartyNote[]> => {
+    const response = await apiClient.get('/counterparty-notes/', { params: { counterparty: counterpartyId, page_size: 1000 } })
+    return response.data.results || response.data
+  },
+
+  create: async (data: { counterparty: number; content: string }): Promise<CounterpartyNote> => {
+    const response = await apiClient.post('/counterparty-notes/', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<Pick<CounterpartyNote, 'content'>>): Promise<CounterpartyNote> => {
+    const response = await apiClient.patch(`/counterparty-notes/${id}/`, data)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/counterparty-notes/${id}/`)
   },
 }
 

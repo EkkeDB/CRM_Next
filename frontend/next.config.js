@@ -38,6 +38,8 @@ const nextConfig = {
   
   // Compression
   compress: true,
+
+  // (no proxy rewrites)
 };
 
 module.exports = nextConfig;

@@ -569,6 +569,28 @@ class Counterparty_Facility(models.Model):
     address = models.TextField(blank=True)
     city = models.CharField(max_length=50, blank=True)
     country = models.CharField(max_length=50, blank=True)
+    # Administrative areas
+    province = models.CharField(max_length=100, blank=True)
+    region = models.CharField(max_length=100, blank=True)
+    # Business segment and optional geolocation
+    SEGMENT_CHOICES = [
+        ('BAKERY', 'Bakery'),
+        ('PASTRY', 'Pastry'),
+        ('CANNED_FOOD', 'Canned food'),
+        ('BOTTLERS', 'Bottlers'),
+        ('MERCHANTS', 'Merchants'),
+        ('TECHNICAL', 'Technical'),
+        ('SNACKS', 'Snacks'),
+        ('FEED', 'Feed'),
+        ('BIODIESEL', 'Biodiesel'),
+        ('SAUCES_DRESSINGS', 'Sauces and dressings'),
+        ('FROZEN_FOODS', 'Frozen foods'),
+        ('COSMETICS', 'Cosmetics'),
+        ('OLEOCHEMICALS', 'Oleochemicals'),
+    ]
+    segment = models.CharField(max_length=50, choices=SEGMENT_CHOICES, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     
     # Audit fields
     created_at = models.DateTimeField(auto_now_add=True)
@@ -583,6 +605,76 @@ class Counterparty_Facility(models.Model):
     def __str__(self):
         return f"{self.counterparty.counterparty_name} - {self.counterparty_facility_name}"
 
+
+class FacilityConsumption(models.Model):
+    """Per-commodity consumption for a specific facility"""
+    facility = models.ForeignKey(
+        Counterparty_Facility,
+        on_delete=models.CASCADE,
+        related_name='consumptions'
+    )
+    commodity = models.ForeignKey(Commodity, on_delete=models.PROTECT)
+    monthly_volume = models.DecimalField(max_digits=15, decimal_places=0)
+    yearly_volume = models.DecimalField(max_digits=15, decimal_places=3, null=True, blank=True)
+
+    class Meta:
+        db_table = 'facility_consumptions'
+        ordering = ['commodity']
+        constraints = [
+            models.UniqueConstraint(fields=['facility', 'commodity'], name='uniq_facility_commodity'),
+            models.CheckConstraint(check=models.Q(monthly_volume__gte=0), name='monthly_volume_non_negative'),
+            models.CheckConstraint(check=models.Q(yearly_volume__gte=0) | models.Q(yearly_volume__isnull=True), name='yearly_volume_non_negative_or_null'),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Always derive yearly from monthly to keep in sync
+        if self.monthly_volume is not None:
+            try:
+                from decimal import Decimal
+                self.yearly_volume = (Decimal(str(self.monthly_volume)) * Decimal('12')).quantize(Decimal('0.001'))
+            except Exception:
+                # If conversion fails, leave yearly_volume as-is; serializer should guard values
+                pass
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.facility.counterparty_facility_name} - {self.commodity.commodity_name_short}"
+
+
+class FacilityEnrichmentRun(models.Model):
+    """Tracks a backfill/enrichment run for facilities (for audit and progress)."""
+    STATUS_CHOICES = [
+        ('started', 'Started'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='started')
+
+    # Parameters
+    countries = models.CharField(max_length=200, blank=True)
+    limit = models.IntegerField(default=0)
+    chunk_size = models.IntegerField(default=25)
+    sleep_seconds = models.DecimalField(max_digits=5, decimal_places=2, default=0.30)
+    resume_from_id = models.IntegerField(default=0)
+    dry_run = models.BooleanField(default=False)
+    force = models.BooleanField(default=False)
+
+    # Results
+    processed = models.IntegerField(default=0)
+    updated = models.IntegerField(default=0)
+    skipped = models.IntegerField(default=0)
+    failures = models.IntegerField(default=0)
+    failed_samples = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'facility_enrichment_runs'
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"Run {self.id} ({self.status})"
 
 class Trade_Setting(models.Model):
     setting_name = models.CharField(max_length=100, unique=True)
@@ -657,3 +749,21 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.counterparty.counterparty_name})"
+
+
+class Counterparty_Note(models.Model):
+    """Free-form customer note linked to a Counterparty"""
+    counterparty = models.ForeignKey(Counterparty, on_delete=models.CASCADE, related_name='notes')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'counterparty_notes'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['counterparty', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"Note for {self.counterparty.counterparty_name} @ {self.created_at:%Y-%m-%d %H:%M}"
