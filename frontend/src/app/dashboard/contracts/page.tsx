@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -77,6 +77,14 @@ export default function ContractsPage() {
   const [editLoading, setEditLoading] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const { toast } = useToast()
+
+  // Async counterparty lookup for the select (server-side search + load more)
+  const [cpQuery, setCpQuery] = useState('')
+  const [cpOptions, setCpOptions] = useState<Counterparty[]>([])
+  const [cpPage, setCpPage] = useState(1)
+  const [cpHasMore, setCpHasMore] = useState(false)
+  const [cpLoading, setCpLoading] = useState(false)
+  const firstCpItemRef = useRef<HTMLDivElement | null>(null)
 
   const [formData, setFormData] = useState({
     contract_number: '',
@@ -169,6 +177,7 @@ export default function ContractsPage() {
 
       setContracts(contractsRes.results || contractsRes)
       setCounterparties(counterpartiesRes.results || counterpartiesRes)
+      setCpOptions((counterpartiesRes.results || counterpartiesRes) as Counterparty[])
       setCommodities(commoditiesRes.results || commoditiesRes)
       setTraders(tradersRes)
       setCurrencies(currenciesRes)
@@ -192,6 +201,42 @@ export default function ContractsPage() {
       setLoading(false)
     }
   }
+
+  // Load counterparties for the select with optional server-side search and paging
+  const loadCounterparties = async (page = 1, reset = false) => {
+    try {
+      setCpLoading(true)
+      const params: any = { page }
+      const term = (cpQuery || '').trim()
+      if (term.length >= 3) params.search = term
+      const resp: any = await counterpartiesApi.getAll(params)
+      const list: Counterparty[] = resp.results || resp
+      const nextUrl = resp?.next
+      const count = typeof resp?.count === 'number' ? resp.count : undefined
+      const hasMore = Boolean(nextUrl) || (typeof count === 'number' && (page * (list?.length || 0)) < count)
+      setCpHasMore(hasMore)
+      setCpPage(page)
+      setCpOptions(prev => (reset ? list : [...prev, ...list]))
+    } catch {
+      // ignore
+    } finally {
+      setCpLoading(false)
+    }
+  }
+
+  // Debounce cpQuery changes
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const term = (cpQuery || '').trim()
+      if (term.length === 0) {
+        loadCounterparties(1, true)
+      } else if (term.length >= 3) {
+        loadCounterparties(1, true)
+      }
+    }, 300)
+    return () => clearTimeout(handle)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpQuery])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -611,9 +656,41 @@ export default function ContractsPage() {
                       <SelectValue placeholder="Select counterparty" />
                     </SelectTrigger>
                     <SelectContent>
-                      {counterparties.map(cp => (
-                        <SelectItem key={cp.id} value={cp.id.toString()}>{cp.counterparty_name}</SelectItem>
+                      <div className="p-2 border-b">
+                        <div className="flex items-center gap-2">
+                          <Search className="h-4 w-4 text-gray-400" />
+                          <Input
+                            autoFocus
+                            placeholder="Search counterparties... (min 3 letters)"
+                            value={cpQuery}
+                            onChange={(e) => setCpQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowDown' && firstCpItemRef.current) {
+                                e.preventDefault()
+                                firstCpItemRef.current.focus()
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {(cpOptions.length ? cpOptions : counterparties).map((cp, idx) => (
+                        <SelectItem
+                          key={cp.id}
+                          value={cp.id.toString()}
+                          ref={idx === 0 ? (firstCpItemRef as any) : undefined}
+                        >
+                          {cp.counterparty_name}
+                        </SelectItem>
                       ))}
+                      {cpHasMore && (
+                        <div className="p-2">
+                          <Button variant="outline" size="sm" onClick={() => loadCounterparties(cpPage + 1)} disabled={cpLoading}>
+                            {cpLoading ? (
+                              <span className="flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" /> Loading...</span>
+                            ) : 'Load more'}
+                          </Button>
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -921,7 +998,41 @@ export default function ContractsPage() {
                     <Select value={dealFormCreate.counterparty} onValueChange={(v) => setDealFormCreate({ ...dealFormCreate, counterparty: v })}>
                       <SelectTrigger><SelectValue placeholder="Select counterparty" /></SelectTrigger>
                       <SelectContent>
-                        {(counterparties as any[]).map(cp => <SelectItem key={(cp as any).id} value={(cp as any).id.toString()}>{(cp as any).counterparty_name}</SelectItem>)}
+                        <div className="p-2 border-b">
+                          <div className="flex items-center gap-2">
+                            <Search className="h-4 w-4 text-gray-400" />
+                            <Input
+                              autoFocus
+                              placeholder="Search counterparties... (min 3 letters)"
+                              value={cpQuery}
+                              onChange={(e) => setCpQuery(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowDown' && firstCpItemRef.current) {
+                                  e.preventDefault()
+                                  firstCpItemRef.current.focus()
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                        {(cpOptions.length ? cpOptions : counterparties).map((cp, idx) => (
+                          <SelectItem
+                            key={(cp as any).id}
+                            value={(cp as any).id.toString()}
+                            ref={idx === 0 ? (firstCpItemRef as any) : undefined}
+                          >
+                            {(cp as any).counterparty_name}
+                          </SelectItem>
+                        ))}
+                        {cpHasMore && (
+                          <div className="p-2">
+                            <Button variant="outline" size="sm" onClick={() => loadCounterparties(cpPage + 1)} disabled={cpLoading}>
+                              {cpLoading ? (
+                                <span className="flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" /> Loading...</span>
+                              ) : 'Load more'}
+                            </Button>
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1399,3 +1510,4 @@ export default function ContractsPage() {
     </div>
   )
 }
+

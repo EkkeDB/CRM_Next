@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -49,6 +49,13 @@ export default function ContactsPage() {
     notes: ''
   })
   const [counterpartyOptions, setCounterpartyOptions] = useState<{ value: number; label: string }[]>([])
+  // Async counterparty lookup for the select
+  const [cpQuery, setCpQuery] = useState('')
+  const [cpOptions, setCpOptions] = useState<{ value: number; label: string }[]>([])
+  const [cpPage, setCpPage] = useState(1)
+  const [cpHasMore, setCpHasMore] = useState(false)
+  const [cpLoading, setCpLoading] = useState(false)
+  const firstCpItemRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -74,14 +81,47 @@ export default function ContactsPage() {
 
   const fetchCounterparties = async () => {
     try {
-      const data = await counterpartiesApi.getAll({ page_size: 1000 })
-      const list = data.results || []
-      setCounterpartyOptions(list.map((cp: any) => ({ value: cp.id, label: cp.counterparty_name })))
+      const data = await counterpartiesApi.getAll()
+      const list = (data.results || data) as any[]
+      const base = list.map((cp: any) => ({ value: cp.id, label: cp.counterparty_name }))
+      setCounterpartyOptions(base)
+      setCpOptions(base)
     } catch (e) {
       // Soft-fail; page still works but without enforced link
       console.warn('Failed to load counterparties for contacts form')
     }
   }
+
+  // Load counterparties for select with server-side search and paging
+  const loadCounterparties = async (page = 1, reset = false) => {
+    try {
+      setCpLoading(true)
+      const params: any = { page }
+      const term = (cpQuery || '').trim()
+      if (term.length >= 3) params.search = term
+      const resp: any = await counterpartiesApi.getAll(params)
+      const list: any[] = resp.results || resp
+      const mapped = list.map((cp: any) => ({ value: cp.id, label: cp.counterparty_name }))
+      const nextUrl = resp?.next
+      const count = typeof resp?.count === 'number' ? resp.count : undefined
+      const hasMore = Boolean(nextUrl) || (typeof count === 'number' && (page * (mapped?.length || 0)) < count)
+      setCpHasMore(hasMore)
+      setCpPage(page)
+      setCpOptions(prev => (reset ? mapped : [...prev, ...mapped]))
+    } catch {}
+    finally { setCpLoading(false) }
+  }
+
+  // Debounce cpQuery
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const term = (cpQuery || '').trim()
+      if (term.length === 0) loadCounterparties(1, true)
+      else if (term.length >= 3) loadCounterparties(1, true)
+    }, 300)
+    return () => clearTimeout(handle)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpQuery])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -335,9 +375,41 @@ export default function ContactsPage() {
                       <SelectValue placeholder="Select company" />
                     </SelectTrigger>
                     <SelectContent>
-                      {counterpartyOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value.toString()}>{opt.label}</SelectItem>
+                      <div className="p-2 border-b">
+                        <div className="flex items-center gap-2">
+                          <Search className="h-4 w-4 text-gray-400" />
+                          <Input
+                            autoFocus
+                            placeholder="Search companies... (min 3 letters)"
+                            value={cpQuery}
+                            onChange={(e) => setCpQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowDown' && firstCpItemRef.current) {
+                                e.preventDefault()
+                                firstCpItemRef.current.focus()
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {(cpOptions.length ? cpOptions : counterpartyOptions).map((opt, idx) => (
+                        <SelectItem
+                          key={opt.value}
+                          value={opt.value.toString()}
+                          ref={idx === 0 ? (firstCpItemRef as any) : undefined}
+                        >
+                          {opt.label}
+                        </SelectItem>
                       ))}
+                      {cpHasMore && (
+                        <div className="p-2">
+                          <Button variant="outline" size="sm" onClick={() => loadCounterparties(cpPage + 1)} disabled={cpLoading}>
+                            {cpLoading ? (
+                              <span className="flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" /> Loading...</span>
+                            ) : 'Load more'}
+                          </Button>
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

@@ -26,6 +26,9 @@ const COUNTERPARTY_TYPES = [
 export default function CounterpartiesPage() {
   const [counterparties, setCounterparties] = useState<Counterparty[]>([])
   const [loading, setLoading] = useState(true)
+  const [totalCount, setTotalCount] = useState<number>(0)
+  const [customerCount, setCustomerCount] = useState<number>(0)
+  const [supplierCount, setSupplierCount] = useState<number>(0)
   const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all')
@@ -75,11 +78,14 @@ export default function CounterpartiesPage() {
     return Object.keys(errors).length === 0
   }
 
-  const fetchData = async () => {
+  const fetchData = async (params?: { search?: string }) => {
     try {
       setLoading(true)
-      const response = await counterpartiesApi.getAll()
+      const response = await counterpartiesApi.getAll(params)
       setCounterparties(response.results || response)
+      // Capture server-reported total matches so counts reflect the full dataset, not just this page
+      const count = (response as any)?.count
+      setTotalCount(typeof count === 'number' ? count : (Array.isArray(response) ? response.length : 0))
     } catch (error) {
       console.error('Error fetching counterparties:', error)
       toast({
@@ -91,6 +97,46 @@ export default function CounterpartiesPage() {
       setLoading(false)
     }
   }
+
+  // Fetch summary counts (customers / suppliers) using lightweight list calls to read `.count` only
+  const fetchSummaryCounts = async (params?: { search?: string }) => {
+    try {
+      const [customersResp, suppliersResp] = await Promise.all([
+        counterpartiesApi.getAll({ ...(params?.search ? { search: params.search } : {}), is_customer: true }),
+        counterpartiesApi.getAll({ ...(params?.search ? { search: params.search } : {}), is_supplier: true }),
+      ])
+      const c1 = (customersResp as any)?.count
+      const c2 = (suppliersResp as any)?.count
+      setCustomerCount(typeof c1 === 'number' ? c1 : 0)
+      setSupplierCount(typeof c2 === 'number' ? c2 : 0)
+    } catch (e) {
+      // Fallback: compute from current page to avoid blocking UI
+      setCustomerCount(counterparties.filter(cp => cp.is_customer).length)
+      setSupplierCount(counterparties.filter(cp => cp.is_supplier).length)
+    }
+  }
+
+  // Debounced server-side search across full dataset
+  useEffect(() => {
+    const term = (searchTerm || '').trim()
+    const handle = setTimeout(() => {
+      if (term.length >= 3) {
+        fetchData({ search: term })
+        fetchSummaryCounts({ search: term })
+      } else if (term.length === 0) {
+        // Reset to default list when cleared
+        fetchData()
+        fetchSummaryCounts()
+      }
+      // If 1 character, do nothing (avoid noisy queries)
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [searchTerm])
+
+  // Initial summary counts on mount
+  useEffect(() => {
+    fetchSummaryCounts()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -310,14 +356,6 @@ export default function CounterpartiesPage() {
 
     return matchesSearch && matchesFilter
   })
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
 
   return (
     <div className="container mx-auto py-6">
@@ -552,9 +590,9 @@ export default function CounterpartiesPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Counterparties ({filteredCounterparties.length})</span>
+            <span>Counterparties ({totalCount || filteredCounterparties.length})</span>
             <div className="text-sm text-muted-foreground">
-              {counterparties.filter(cp => cp.is_customer).length} customers, {counterparties.filter(cp => cp.is_supplier).length} suppliers
+              {customerCount} customers, {supplierCount} suppliers
             </div>
           </CardTitle>
           <CardDescription>
@@ -562,6 +600,12 @@ export default function CounterpartiesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {loading && (
+            <div className="flex items-center gap-2 mb-3 text-sm text-muted-foreground">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+              Loading...
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>

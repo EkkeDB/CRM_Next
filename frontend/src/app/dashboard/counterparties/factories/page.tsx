@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +50,14 @@ export default function FactoriesPage() {
   const [facilities, setFacilities] = useState<CounterpartyFacility[]>([])
   const [counterparties, setCounterparties] = useState<Counterparty[]>([])
   const [commodities, setCommodities] = useState<Commodity[]>([])
+
+  // Counterparty async lookup (server-side search + load more)
+  const [cpQuery, setCpQuery] = useState('')
+  const [cpOptions, setCpOptions] = useState<Counterparty[]>([])
+  const [cpPage, setCpPage] = useState(1)
+  const [cpHasMore, setCpHasMore] = useState(false)
+  const [cpLoading, setCpLoading] = useState(false)
+  const firstCpItemRef = useRef<HTMLDivElement | null>(null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<CounterpartyFacility | null>(null)
@@ -104,6 +112,54 @@ export default function FactoriesPage() {
       setLoading(false)
     }
   }
+
+  // Load counterparties for the select with optional server-side search and paging
+  const loadCounterparties = async (page = 1, reset = false) => {
+    try {
+      setCpLoading(true)
+      const params: any = { page }
+      const term = (cpQuery || '').trim()
+      if (term.length >= 3) params.search = term
+      const resp: any = await counterpartiesApi.getAll(params)
+      const list: Counterparty[] = resp.results || resp
+      const nextUrl = resp?.next
+      const count = typeof resp?.count === 'number' ? resp.count : undefined
+      // Determine if more pages likely exist
+      const hasMore = Boolean(nextUrl) || (typeof count === 'number' && (page * (list?.length || 0)) < count)
+      setCpHasMore(hasMore)
+      setCpPage(page)
+      setCpOptions(prev => (reset ? list : [...prev, ...list]))
+    } catch (e) {
+      // Fallback to whatever we have
+    } finally {
+      setCpLoading(false)
+    }
+  }
+
+  // Debounce search for counterparties select
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const term = (cpQuery || '').trim()
+      if (term.length === 0) {
+        // No query: show first page
+        loadCounterparties(1, true)
+      } else if (term.length >= 3) {
+        loadCounterparties(1, true)
+      }
+      // For 1-2 chars, do nothing to avoid noisy queries
+    }, 300)
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cpQuery])
+
+  // Refresh lookup options whenever dialog opens
+  useEffect(() => {
+    if (dialogOpen) {
+      setCpQuery('')
+      loadCounterparties(1, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogOpen])
 
   const openCreate = () => {
     setEditing(null)
@@ -304,9 +360,41 @@ export default function FactoriesPage() {
                   <Select value={String(form.counterparty || '')} onValueChange={(v) => setForm({ ...form, counterparty: parseInt(v) as any })}>
                     <SelectTrigger><SelectValue placeholder="Select counterparty" /></SelectTrigger>
                     <SelectContent>
-                      {counterparties.map(cp => (
-                        <SelectItem key={cp.id} value={String(cp.id)}>{cp.counterparty_name}</SelectItem>
+                      <div className="p-2 border-b">
+                        <div className="flex items-center gap-2">
+                          <Search className="h-4 w-4 text-gray-400" />
+                          <Input
+                            autoFocus
+                            placeholder="Search counterparties... (min 3 letters)"
+                            value={cpQuery}
+                            onChange={(e) => setCpQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowDown' && firstCpItemRef.current) {
+                                e.preventDefault()
+                                firstCpItemRef.current.focus()
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {(cpOptions.length ? cpOptions : counterparties).map((cp, idx) => (
+                        <SelectItem
+                          key={cp.id}
+                          value={String(cp.id)}
+                          ref={idx === 0 ? (firstCpItemRef as any) : undefined}
+                        >
+                          {cp.counterparty_name}
+                        </SelectItem>
                       ))}
+                      {cpHasMore && (
+                        <div className="p-2">
+                          <Button variant="outline" size="sm" onClick={() => loadCounterparties(cpPage + 1)} disabled={cpLoading}>
+                            {cpLoading ? (
+                              <span className="flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" /> Loading...</span>
+                            ) : 'Load more'}
+                          </Button>
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
