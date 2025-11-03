@@ -11,40 +11,25 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/layout.js"
     ],
-    "/dashboard/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
-    ],
     "/dashboard/contracts/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/contracts/page.js"
     ],
-    "/dashboard/counterparties/page": [
+    "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/counterparties/page.js"
+      "static/chunks/app/page.js"
     ],
-    "/dashboard/commodities/page": [
+    "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/commodities/page.js"
+      "static/chunks/app/dashboard/page.js"
     ],
-    "/dashboard/additives/page": [
+    "/dashboard/reports/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/additives/page.js"
-    ],
-    "/dashboard/icoterms/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/icoterms/page.js"
-    ],
-    "/dashboard/cost-centers/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/cost-centers/page.js"
+      "static/chunks/app/dashboard/reports/page.js"
     ]
   }
 }

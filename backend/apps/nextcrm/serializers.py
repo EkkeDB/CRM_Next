@@ -155,21 +155,35 @@ class CounterpartySerializer(serializers.ModelSerializer):
         fields = '__all__'
         
     def validate_counterparty_name(self, value):
-        """Validate counterparty name"""
-        if not value.strip():
+        """Validate counterparty name.
+        Allow duplicate names when a distinct counterparty_code is provided.
+        Keep duplicate-name protection only for name-only entries (no code).
+        """
+        name = (value or '').strip()
+        if not name:
             raise serializers.ValidationError("Company name cannot be empty")
-        
-        # Check for duplicate names during creation
-        if not self.instance:
-            if Counterparty.objects.filter(counterparty_name__iexact=value.strip()).exists():
-                raise serializers.ValidationError("A counterparty with this name already exists")
-        # Check for duplicate names during update (exclude current instance)
-        elif self.instance and Counterparty.objects.filter(
-            counterparty_name__iexact=value.strip()
-        ).exclude(id=self.instance.id).exists():
+
+        # Peek at code from payload to decide behavior
+        raw_code = None
+        try:
+            # initial_data is available in DRF serializer for field-level validators
+            raw_code = (self.initial_data or {}).get('counterparty_code')
+        except Exception:
+            pass
+        code = (str(raw_code).strip().upper()) if raw_code not in (None, '') else None
+
+        # If a code is provided, allow duplicate names (code is authoritative and validated separately)
+        if code:
+            return name
+
+        # No code provided → enforce name uniqueness (case-insensitive)
+        qs = Counterparty.objects.filter(counterparty_name__iexact=name)
+        if self.instance:
+            qs = qs.exclude(id=self.instance.id)
+        if qs.exists():
             raise serializers.ValidationError("A counterparty with this name already exists")
-            
-        return value.strip()
+
+        return name
     
     def validate_counterparty_code(self, value):
         """Validate counterparty code"""
@@ -259,7 +273,7 @@ class ContractSerializer(serializers.ModelSerializer):
     counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
     commodity_name = serializers.CharField(source='commodity.commodity_name_short', read_only=True)
     commodity_subtype_name = serializers.CharField(source='commodity.commodity_subtype.commodity_subtype_name', read_only=True)
-    broker_name = serializers.CharField(source='broker.broker_name', read_only=True)
+    broker_name = serializers.CharField(source='broker.broker_name', read_only=True, allow_null=True)
     trade_currency_code = serializers.CharField(source='trade_currency.currency_code', read_only=True)
     broker_fee_currency_code = serializers.CharField(source='broker_fee_currency.currency_code', read_only=True)
     total_value = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
@@ -323,11 +337,10 @@ class ContractCreateSerializer(serializers.ModelSerializer):
                 errors['delivery_period_start'] = 'Both delivery_period_start and delivery_period_end are required'
             elif dps > dpe:
                 errors['delivery_period_start'] = 'Start cannot be after end'
-            elif dps < timezone.now().date():
-                errors['delivery_period_start'] = 'Delivery period cannot be in the past'
         elif dp:
-            if dp < timezone.now().date():
-                errors['delivery_period'] = 'Delivery period cannot be in the past'
+            # Map legacy single date to start/end for transition
+            data['delivery_period_start'] = dp
+            data['delivery_period_end'] = dp
         
         if errors:
             raise serializers.ValidationError(errors)

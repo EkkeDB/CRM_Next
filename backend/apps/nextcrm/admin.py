@@ -7,7 +7,8 @@ from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
     Commodity_Subtype, Commodity, Counterparty, Broker, ICOTERM,
     Delivery_Format, Additive, Sociedad, Trade_Operation_Type,
-    Contract, Counterparty_Facility, Trade_Setting, FacilityEnrichmentRun
+    Contract, Counterparty_Facility, Trade_Setting, FacilityEnrichmentRun,
+    Deal, DealLine
 )
 
 
@@ -216,3 +217,45 @@ class TradeSettingAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+# -----------------
+# Deals / DealLines
+# -----------------
+
+class DealLineInline(admin.TabularInline):
+    model = DealLine
+    extra = 0
+    fields = ('delivery_period_start', 'delivery_period_end', 'quantity', 'sync_status', 'materialized_contract')
+    autocomplete_fields = ('materialized_contract',)
+    show_change_link = True
+
+
+@admin.register(Deal)
+class DealAdmin(admin.ModelAdmin):
+    list_display = (
+        'deal_number', 'counterparty', 'commodity', 'price', 'trade_currency',
+        'status', 'date', 'trader'
+    )
+    list_filter = ('status', 'date', 'trader', 'counterparty', 'trade_operation_type')
+    search_fields = (
+        'deal_number', 'counterparty__counterparty_name',
+        'commodity__commodity_name_short', 'trader__trader_name'
+    )
+    readonly_fields = ('deal_number', 'created_at', 'updated_at')
+    ordering = ('-date', '-created_at')
+    inlines = [DealLineInline]
+
+
+@admin.register(DealLine)
+class DealLineAdmin(admin.ModelAdmin):
+    def contract_number(self, obj):
+        return getattr(obj.materialized_contract, 'contract_number', None)
+    contract_number.short_description = 'Contract'
+
+    list_display = (
+        'deal', 'delivery_period_start', 'delivery_period_end', 'quantity', 'sync_status', 'contract_number'
+    )
+    list_filter = ('sync_status', 'delivery_period_start', 'delivery_period_end')
+    search_fields = ('deal__deal_number', 'materialized_contract__contract_number')
+    ordering = ('-delivery_period_start',)

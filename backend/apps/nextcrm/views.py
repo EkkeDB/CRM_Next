@@ -163,6 +163,8 @@ class CounterpartyViewSet(viewsets.ModelViewSet):
         info.append(['- Required: counterparty_name. At least one of is_supplier/is_customer must be TRUE.'])
         info.append(['- Optional fields may be left blank.'])
         info.append(['- Save as .xlsx and upload via /api/counterparties/bulk_upload/'])
+        info.append(['- Duplicate names are allowed when counterparty_code differs (code is authoritative).'])
+        info.append(['- If counterparty_code is provided and not found, a NEW record is created (no fallback to name).'])
 
         # Render to response
         from io import BytesIO
@@ -270,14 +272,17 @@ class CounterpartyViewSet(viewsets.ModelViewSet):
                     continue
                 data['counterparty_name'] = name
 
-                # Create or update by counterparty_code if given, else by name (case-insensitive)
+                # Option A: code-authoritative behavior
+                # If counterparty_code is provided and found -> update that record.
+                # If counterparty_code is provided and NOT found -> create a NEW record (no fallback to name).
+                # If no code provided -> fallback to name (update if found, else create).
                 instance = None
                 raw_code = data.get('counterparty_code')
                 code = str(raw_code).strip() if raw_code not in (None, '') else None
                 if code:
                     instance = Counterparty.objects.filter(counterparty_code__iexact=code).first()
                     data['counterparty_code'] = code
-                if instance is None:
+                else:
                     instance = Counterparty.objects.filter(counterparty_name__iexact=name).first()
 
                 if instance:
@@ -298,6 +303,31 @@ class CounterpartyViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 # Capture unexpected errors per-row instead of 500
                 errors.append({'row': idx, 'error': f'Unexpected error: {e}'})
+
+        # Optional: return CSV of errors when requested (useful for dry-run)
+        want_csv = request.query_params.get('errors_format', '').lower() == 'csv' or request.query_params.get('format', '').lower() == 'csv'
+        if want_csv:
+            import csv
+            from io import StringIO
+            def _fmt_err(e):
+                if isinstance(e, dict):
+                    parts = []
+                    for k, v in e.items():
+                        if isinstance(v, (list, tuple)):
+                            parts.append(f"{k}: {'; '.join(map(str, v))}")
+                        else:
+                            parts.append(f"{k}: {v}")
+                    return ' | '.join(parts)
+                return str(e)
+            buf = StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(['row', 'error'])
+            for item in errors:
+                writer.writerow([item.get('row'), _fmt_err(item.get('error'))])
+            csv_bytes = buf.getvalue().encode('utf-8')
+            resp = HttpResponse(csv_bytes, content_type='text/csv')
+            resp['Content-Disposition'] = 'attachment; filename="counterparties_dry_run_errors.csv"'
+            return resp
 
         return Response({
             'created': created,
@@ -578,7 +608,7 @@ class ContractViewSet(viewsets.ModelViewSet):
         info.append(['- Use codes where available (counterparty_code, currency codes, icoterm codes) to reduce ambiguity.'])
         info.append(['- Dates format: YYYY-MM-DD.'])
         info.append(['- deal_number is mandatory; if the deal does not exist, it will be created.'])
-        info.append(['- delivery_period_start and end are mandatory; until migration, they must be equal.'])
+        info.append(['- delivery_period_start and delivery_period_end are mandatory; start must not be after end.'])
         info.append(['- If an existing DealLine already points to a contract, a new line will be appended (no overwrite).'])
 
         # Build OPTIONS sheet with dropdown values for most FK fields (except counterparty)
@@ -756,12 +786,24 @@ class ContractViewSet(viewsets.ModelViewSet):
         replace_materialized = (request.query_params.get('replace_materialized', 'false').lower() == 'true')
         dry_run = (request.query_params.get('dry_run', 'false').lower() == 'true')
 
+        # Preview support: limit to first N rows and return a plan summary
+        try:
+            preview_rows = int(request.query_params.get('preview_rows', '0') or '0')
+        except Exception:
+            preview_rows = 0
+        preview_mode = preview_rows > 0
+        preview_items = []
+        p_contract_create = p_contract_update = 0
+        p_deal_create = 0
+        p_line_create = p_line_link = p_line_append = p_line_replace = 0
+
         # Iterate rows
         for idx, row in enumerate(rows[1:], start=2):
             try:
                 if not row or all(c in (None, '') for c in row):
                     continue
                 data = {header[i]: row[i] for i in range(min(len(header), len(row))) if header[i]}
+                row_plan = {'row': idx, 'contract_action': None, 'deal_action': None, 'line_action': None, 'problems': []}
 
                 # Normalize basic scalars
                 def val_s(v):
@@ -787,7 +829,21 @@ class ContractViewSet(viewsets.ModelViewSet):
                 commodity = get_by_name(Commodity, 'commodity_name_short', data.get('commodity')) or get_by_name(Commodity, 'commodity_name_full', data.get('commodity'))
                 trade_currency = get_currency(data.get('trade_currency'))
                 if not (trader and counterparty and commodity and trade_currency):
-                    errors.append({'row': idx, 'error': 'Missing or invalid trader/counterparty/commodity/trade_currency'})
+                    # Provide detailed diagnostics for CSV export
+                    missing = {}
+                    if not trader:
+                        missing['trader'] = f"not found: {val_s(data.get('trader')) or '(blank)'}"
+                    if not counterparty:
+                        missing['counterparty'] = f"not found by code: {cp_code or '(none)'}; name: {val_s(data.get('counterparty')) or '(none)'}"
+                    if not commodity:
+                        missing['commodity'] = f"not found: {val_s(data.get('commodity')) or '(blank)'}"
+                    if not trade_currency:
+                        missing['trade_currency'] = f"invalid code: {val_s(data.get('trade_currency')) or '(blank)'}"
+                    errors.append({'row': idx, 'error': missing or 'Missing or invalid trader/counterparty/commodity/trade_currency'})
+                    if preview_mode:
+                        row_plan['contract_action'] = 'error'
+                        row_plan['problems'].append('Missing or invalid trader/counterparty/commodity/trade_currency')
+                        preview_items.append(row_plan)
                     continue
 
                 # Optional relations
@@ -823,15 +879,16 @@ class ContractViewSet(viewsets.ModelViewSet):
                 dps = parse_date(data.get('delivery_period_start'))
                 dpe = parse_date(data.get('delivery_period_end'))
                 delivery_period = parse_date(data.get('delivery_period'))
-                # Enforce new start/end semantics: for now they must be present and equal; fallback to delivery_period for legacy
+                # True ranges: require start and end; fallback to legacy single date by mapping to both
                 if dps or dpe:
                     if not (dps and dpe):
                         errors.append({'row': idx, 'error': 'Both delivery_period_start and delivery_period_end are required'})
                         continue
-                    if dps != dpe:
-                        errors.append({'row': idx, 'error': 'delivery_period_start and delivery_period_end must be equal until migration'})
-                        continue
+                    # keep delivery_period as start for backward-compat consumers
                     delivery_period = dps
+                elif delivery_period:
+                    dps = delivery_period
+                    dpe = delivery_period
                 contract_date = parse_date(data.get('date'))
                 status_val = val_s(data.get('status')) or 'draft'
                 notes = val_s(data.get('notes'))
@@ -864,15 +921,58 @@ class ContractViewSet(viewsets.ModelViewSet):
                     mandatory_missing.append('unit_of_measure')
                 if not entrega:
                     mandatory_missing.append('entrega')
-                if not delivery_period:
-                    mandatory_missing.append('delivery_period')
+                if not (dps and dpe):
+                    mandatory_missing.append('delivery_period_start/end')
                 if not contract_date:
                     mandatory_missing.append('date')
                 if not val_s(data.get('status')):
                     mandatory_missing.append('status')
                 if mandatory_missing:
-                    errors.append({'row': idx, 'error': f"Missing mandatory fields: {', '.join(mandatory_missing)}"})
+                    msg = f"Missing mandatory fields: {', '.join(mandatory_missing)}"
+                    errors.append({'row': idx, 'error': msg})
+                    if preview_mode:
+                        row_plan['contract_action'] = 'error'
+                        row_plan['problems'].append(msg)
+                        preview_items.append(row_plan)
                     continue
+
+                # Resolve/ensure Deal before creating/updating Contract, so we can link at creation time
+                deal = None
+                deal_number = val_s(data.get('deal_number'))
+                if deal_number:
+                    deal = Deal.objects.filter(deal_number__iexact=deal_number).first()
+                    if not deal and create_missing_deal:
+                        # Build minimal Deal header from row (broker optional; other fields validated above)
+                        deal = Deal(
+                            deal_number=deal_number,
+                            trader=trader,
+                            counterparty=counterparty,
+                            commodity=commodity,
+                            price=price,
+                            trade_currency=trade_currency,
+                            payment_days=int(val_s(data.get('payment_days')) or '0') or 0,
+                            unit_of_measure=uom,
+                            broker_fee=broker_fee,
+                            broker_fee_currency=broker_fee_currency,
+                            freight_cost=freight_cost,
+                            forex=forex,
+                            date=contract_date,
+                            status=status_val,
+                            sociedad=sociedad,
+                            trade_operation_type=tot,
+                            delivery_format=delivery_format,
+                            additive=additive,
+                            broker=broker,
+                            icoterm=icoterm,
+                            cost_center=cost_center,
+                            notes=notes,
+                        )
+                        if not dry_run:
+                            try:
+                                deal.save()
+                            except Exception as e:
+                                errors.append({'row': idx, 'error': f'Failed to create deal {deal_number}: {e}'})
+                                continue
 
                 # Find or create Contract by contract_number
                 contract_number = val_s(data.get('contract_number'))
@@ -901,12 +1001,13 @@ class ContractViewSet(viewsets.ModelViewSet):
                     'quantity': quantity,
                     'unit_of_measure': uom,
                     'entrega': entrega,
-                    'delivery_period': delivery_period,
-                    'delivery_period_start': delivery_period,
-                    'delivery_period_end': delivery_period,
+                    'delivery_period': dps,
+                    'delivery_period_start': dps,
+                    'delivery_period_end': dpe,
                     'date': contract_date,
                     'status': status_val if status_val in dict(Contract.STATUS_CHOICES) else 'draft',
                     'notes': notes,
+                    'deal': (deal if (deal and not dry_run and getattr(deal, 'pk', None)) else None),
                 }
 
                 # Save contract
@@ -928,78 +1029,138 @@ class ContractViewSet(viewsets.ModelViewSet):
                         contract.save()
                     created += 1
 
-                # Deal linkage
-                deal_number = val_s(data.get('deal_number'))
-                if deal_number:
-                    deal = Deal.objects.filter(deal_number__iexact=deal_number).first()
-                    if not deal and create_missing_deal:
-                        # Build minimal Deal header from row
-                        deal = Deal(
-                            deal_number=deal_number,
-                            trader=trader,
-                            counterparty=counterparty,
-                            commodity=commodity,
-                            price=price,
-                            trade_currency=trade_currency,
-                            payment_days=payload['payment_days'],
-                            unit_of_measure=uom,
-                            broker_fee=broker_fee,
-                            broker_fee_currency=broker_fee_currency,
-                            freight_cost=freight_cost,
-                            forex=forex,
-                            date=contract_date,
-                            status=status_val,
-                            sociedad=sociedad,
-                            trade_operation_type=tot,
-                            delivery_format=delivery_format,
-                            additive=additive,
-                            broker=broker,
-                            icoterm=icoterm,
-                            cost_center=cost_center,
-                            notes=notes,
-                        )
-                        if not dry_run:
-                            deal.save()
-                    if deal:
-                        # Attach contract to deal
-                        if not dry_run:
-                            contract.deal = deal
-                            contract.save(update_fields=['deal'])
+                # Preview counters for contract action
+                if preview_mode:
+                    if contract:
+                        p_contract_update += 1
+                        row_plan['contract_action'] = 'update'
+                    else:
+                        p_contract_create += 1
+                        row_plan['contract_action'] = 'create'
 
-                        # DealLine linking
-                        line = DealLine.objects.filter(deal=deal, delivery_period_start=delivery_period, delivery_period_end=delivery_period).first()
-                        if line and line.materialized_contract and line.materialized_contract_id != contract.id:
-                            if replace_materialized:
-                                if not dry_run:
-                                    line.materialized_contract = contract
-                                    line.sync_status = 'synced'
-                                    line.save(update_fields=['materialized_contract', 'sync_status'])
-                            else:
-                                # Append new line for this period
-                                if not dry_run:
-                                    line = DealLine.objects.create(deal=deal, delivery_period_start=delivery_period, delivery_period_end=delivery_period, materialized_contract=contract, sync_status='synced')
-                        elif line:
-                            # Link if empty
-                            if not line.materialized_contract_id:
-                                if not dry_run:
-                                    line.materialized_contract = contract
-                                    line.sync_status = 'synced'
-                                    line.save(update_fields=['materialized_contract', 'sync_status'])
-                        else:
+                # Deal linkage for DealLine (use true start/end range) if a deal exists
+                if deal_number and (deal or Deal.objects.filter(deal_number__iexact=deal_number).exists()):
+                    # DealLine linking (use true start/end range) without referencing unsaved Deal in filters
+                    line = None
+                    if deal and getattr(deal, 'pk', None):
+                        line = DealLine.objects.filter(deal=deal, delivery_period_start=dps, delivery_period_end=dpe).first()
+                    else:
+                        # Dry-run or unsaved Deal: try by deal_number to avoid unsaved instance in filter
+                        line = DealLine.objects.filter(deal__deal_number__iexact=deal_number, delivery_period_start=dps, delivery_period_end=dpe).first()
+                    if line and line.materialized_contract and line.materialized_contract_id != contract.id:
+                        if replace_materialized:
                             if not dry_run:
-                                DealLine.objects.create(deal=deal, delivery_period_start=delivery_period, delivery_period_end=delivery_period, materialized_contract=contract, sync_status='synced')
+                                line.materialized_contract = contract
+                                line.sync_status = 'synced'
+                                line.save(update_fields=['materialized_contract', 'sync_status'])
+                            if preview_mode:
+                                p_line_replace += 1
+                                row_plan['line_action'] = 'replace'
+                        else:
+                            # Append new line for this period range
+                            if not dry_run:
+                                line = DealLine.objects.create(
+                                    deal=deal,
+                                    delivery_period_start=dps,
+                                    delivery_period_end=dpe,
+                                    materialized_contract=contract,
+                                    sync_status='synced'
+                                )
+                            if preview_mode:
+                                p_line_append += 1
+                                row_plan['line_action'] = 'append'
+                    elif line:
+                        # Link if empty
+                        if not line.materialized_contract_id:
+                            if not dry_run:
+                                line.materialized_contract = contract
+                                line.sync_status = 'synced'
+                                line.save(update_fields=['materialized_contract', 'sync_status'])
+                            if preview_mode:
+                                p_line_link += 1
+                                row_plan['line_action'] = 'link'
+                    else:
+                        if not dry_run:
+                            DealLine.objects.create(
+                                deal=deal,
+                                delivery_period_start=dps,
+                                delivery_period_end=dpe,
+                                materialized_contract=contract,
+                                sync_status='synced'
+                            )
+                        if preview_mode:
+                            p_line_create += 1
+                            row_plan['line_action'] = 'create'
 
                 results.append({'row': idx, 'id': contract.id, 'status': op})
+                if preview_mode:
+                    # Deal action determination
+                    if deal_number:
+                        exists = Deal.objects.filter(deal_number__iexact=deal_number).exists()
+                        if not exists and create_missing_deal:
+                            p_deal_create += 1
+                            row_plan['deal_action'] = row_plan['deal_action'] or 'create'
+                        elif exists:
+                            row_plan['deal_action'] = row_plan['deal_action'] or 'existing'
+                    preview_items.append(row_plan)
             except Exception as e:
                 errors.append({'row': idx, 'error': f'Unexpected error: {e}'})
+                if preview_mode:
+                    row_plan['contract_action'] = row_plan['contract_action'] or 'error'
+                    row_plan['problems'].append(str(e))
+                    preview_items.append(row_plan)
+            finally:
+                if preview_mode and len(preview_items) >= preview_rows:
+                    break
 
-        return Response({
+        # Optional CSV export of errors (handy for dry-run validation reports)
+        want_csv = request.query_params.get('errors_format', '').lower() == 'csv' or request.query_params.get('format', '').lower() == 'csv'
+        if want_csv:
+            import csv
+            from io import StringIO
+            def _fmt_err(e):
+                if isinstance(e, dict):
+                    parts = []
+                    for k, v in e.items():
+                        if isinstance(v, (list, tuple)):
+                            parts.append(f"{k}: {'; '.join(map(str, v))}")
+                        else:
+                            parts.append(f"{k}: {v}")
+                    return ' | '.join(parts)
+                return str(e)
+            buf = StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(['row', 'error'])
+            for item in errors:
+                writer.writerow([item.get('row'), _fmt_err(item.get('error'))])
+            csv_bytes = buf.getvalue().encode('utf-8')
+            resp = HttpResponse(csv_bytes, content_type='text/csv')
+            resp['Content-Disposition'] = 'attachment; filename="contracts_dry_run_errors.csv"'
+            return resp
+
+        resp = {
             'created': created,
             'updated': updated,
             'errors': errors,
             'processed': created + updated + len(errors),
             'dry_run': dry_run,
-        })
+        }
+        if preview_mode:
+            resp['preview'] = {
+                'rows': preview_items,
+                'summary': {
+                    'willCreateContracts': p_contract_create,
+                    'willUpdateContracts': p_contract_update,
+                    'willCreateDeals': p_deal_create,
+                    'lineActions': {
+                        'create': p_line_create,
+                        'link': p_line_link,
+                        'append': p_line_append,
+                        'replace': p_line_replace,
+                    }
+                }
+            }
+        return Response(resp)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)

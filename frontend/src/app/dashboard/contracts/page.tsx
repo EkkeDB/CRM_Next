@@ -34,6 +34,7 @@ interface ReferenceData {
 
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([])
+  const [contractsCount, setContractsCount] = useState<number>(0)
   const [counterparties, setCounterparties] = useState<Counterparty[]>([])
   const [commodities, setCommodities] = useState<Commodity[]>([])
   const [traders, setTraders] = useState<Trader[]>([])
@@ -82,6 +83,14 @@ export default function ContractsPage() {
   const [contractsUploading, setContractsUploading] = useState(false)
   const [contractsDryRun, setContractsDryRun] = useState(false)
 
+  // Preview modal state
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewRows, setPreviewRows] = useState(20)
+  const [previewData, setPreviewData] = useState<any>(null)
+  const [previewFile, setPreviewFile] = useState<File | null>(null)
+  const previewFileInputId = 'contracts-bulk-preview-file'
+
   const downloadContractsTemplate = async () => {
     try {
       const blob = await contractsApi.downloadTemplate()
@@ -106,6 +115,23 @@ export default function ContractsPage() {
       const res = await contractsApi.bulkUpload(file, { create_missing_deal: true, replace_materialized: false, dry_run: contractsDryRun })
       const msg = `Created: ${res.created}, Updated: ${res.updated}, Errors: ${res.errors?.length || 0}`
       toast({ title: res.dry_run ? 'Dry-run complete' : 'Contracts bulk upload complete', description: msg })
+      // If dry-run produced errors, offer/download a CSV with row-level details
+      if (res.dry_run && (res.errors?.length || 0) > 0) {
+        try {
+          const blob = await contractsApi.bulkUploadErrorsCsv(file, { create_missing_deal: true, replace_materialized: false })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = 'contracts_dry_run_errors.csv'
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          URL.revokeObjectURL(url)
+        } catch (dlErr) {
+          console.error('Failed to download errors CSV', dlErr)
+          toast({ title: 'Notice', description: 'Could not download errors CSV', variant: 'destructive' })
+        }
+      }
       fetchData()
     } catch (err: any) {
       const d = err?.response?.data
@@ -188,7 +214,17 @@ export default function ContractsPage() {
     fetchData()
   }, [])
 
-  const fetchData = async () => {
+  // Debounced server-side search across all contracts
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const term = (searchTerm || '').trim()
+      fetchData(term)
+    }, 300)
+    return () => clearTimeout(handle)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm])
+
+  const fetchData = async (term?: string) => {
     try {
       setLoading(true)
       const [
@@ -205,7 +241,7 @@ export default function ContractsPage() {
         icotermsRes,
         costCentersRes
       ] = await Promise.all([
-        contractsApi.getAll(),
+        contractsApi.getAll({ page_size: 1000, ...(term ? { search: term } : {}) }),
         counterpartiesApi.getAll(),
         commoditiesApi.getAll(),
         referenceDataApi.getTraders(),
@@ -220,6 +256,7 @@ export default function ContractsPage() {
       ])
 
       setContracts(contractsRes.results || contractsRes)
+      setContractsCount(typeof (contractsRes as any).count === 'number' ? (contractsRes as any).count : ((contractsRes as any).results?.length ?? (contractsRes as any).length ?? 0))
       setCounterparties(counterpartiesRes.results || counterpartiesRes)
       setCpOptions((counterpartiesRes.results || counterpartiesRes) as Counterparty[])
       setCommodities(commoditiesRes.results || commoditiesRes)
@@ -250,7 +287,7 @@ export default function ContractsPage() {
   const loadCounterparties = async (page = 1, reset = false) => {
     try {
       setCpLoading(true)
-      const params: any = { page }
+      const params: any = { page, page_size: 100 }
       const term = (cpQuery || '').trim()
       if (term.length >= 3) params.search = term
       const resp: any = await counterpartiesApi.getAll(params)
@@ -535,14 +572,8 @@ export default function ContractsPage() {
   }
 
   const filteredContracts = contracts.filter(contract => {
-    const matchesSearch = 
-      contract.contract_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (contract.counterparty_name && contract.counterparty_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (contract.commodity_name && contract.commodity_name.toLowerCase().includes(searchTerm.toLowerCase()))
-
     const matchesStatus = statusFilter === 'all' || contract.status === statusFilter
-
-    return matchesSearch && matchesStatus
+    return matchesStatus
   })
 
   // Group contracts by deal for UI
@@ -644,6 +675,9 @@ export default function ContractsPage() {
           <p className="text-gray-600 mt-2">Manage commodity trading contracts and workflows</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => { setPreviewOpen(true); setPreviewData(null); setPreviewFile(null); }}>
+            <Eye className="h-4 w-4 mr-2" /> Preview
+          </Button>
           {/* Contracts bulk ops */}
           <label className="text-sm flex items-center gap-2">
             <input type="checkbox" checked={contractsDryRun} onChange={(e) => setContractsDryRun(e.target.checked)} /> Dry run
@@ -661,6 +695,111 @@ export default function ContractsPage() {
             New Deal
           </Button>
         </div>
+        {/* Preview Modal */}
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Contracts Bulk Upload — Preview</DialogTitle>
+              <DialogDescription>Select a file, preview first N rows, then import.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <input id={previewFileInputId} type="file" accept=".xlsx" className="hidden" onChange={(e) => setPreviewFile(e.target.files?.[0] || null)} />
+                <Button variant="outline" onClick={() => (document.getElementById(previewFileInputId) as HTMLInputElement)?.click()}>
+                  <Upload className="h-4 w-4 mr-2" /> Choose file
+                </Button>
+                <div className="text-sm text-gray-600">{previewFile ? previewFile.name : 'No file selected'}</div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <Label htmlFor="preview-rows">Rows</Label>
+                  <Input id="preview-rows" type="number" min={1} max={200} value={previewRows} onChange={(e) => setPreviewRows(parseInt(e.target.value) || 20)} className="w-24" />
+                  <Button onClick={async () => {
+                    if (!previewFile) { toast({ title: 'Select a file first', variant: 'destructive' }); return }
+                    try {
+                      setPreviewLoading(true)
+                      const res = await contractsApi.previewBulk(previewFile, { preview_rows: previewRows, create_missing_deal: true, replace_materialized: false })
+                      setPreviewData(res)
+                    } catch (e: any) {
+                      console.error('Preview failed', e)
+                      toast({ title: 'Preview failed', description: e?.message || 'Server error', variant: 'destructive' })
+                    } finally { setPreviewLoading(false) }
+                  }}>Preview</Button>
+                </div>
+              </div>
+              {previewLoading && (
+                <div className="py-8 flex justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" /></div>
+              )}
+              {previewData?.preview && (
+                <div className="space-y-2">
+                  <div className="text-sm">
+                    <strong>Summary:</strong>
+                    <span className="ml-2">Create: {previewData.preview.summary.willCreateContracts}</span>
+                    <span className="ml-2">Update: {previewData.preview.summary.willUpdateContracts}</span>
+                    <span className="ml-2">Deals+: {previewData.preview.summary.willCreateDeals}</span>
+                    <span className="ml-2">Lines: c:{previewData.preview.summary.lineActions.create} l:{previewData.preview.summary.lineActions.link} a:{previewData.preview.summary.lineActions.append} r:{previewData.preview.summary.lineActions.replace}</span>
+                  </div>
+                  <div className="border rounded">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Row</TableHead>
+                          <TableHead>Contract</TableHead>
+                          <TableHead>Deal</TableHead>
+                          <TableHead>Line</TableHead>
+                          <TableHead>Problems</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {previewData.preview.rows.map((r: any) => (
+                          <TableRow key={r.row}>
+                            <TableCell>{r.row}</TableCell>
+                            <TableCell>{r.contract_action || '-'}</TableCell>
+                            <TableCell>{r.deal_action || '-'}</TableCell>
+                            <TableCell>{r.line_action || '-'}</TableCell>
+                            <TableCell>{(r.problems || []).join('; ')}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex items-center gap-2 justify-end pt-2">
+                    {(previewData?.errors?.length || 0) > 0 && (
+                      <Button variant="outline" onClick={async () => {
+                        if (!previewFile) return
+                        try {
+                          const blob = await contractsApi.bulkUploadErrorsCsv(previewFile, { create_missing_deal: true, replace_materialized: false })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = 'contracts_dry_run_errors.csv'
+                          document.body.appendChild(a)
+                          a.click(); a.remove(); URL.revokeObjectURL(url)
+                        } catch (e) {
+                          toast({ title: 'Could not download errors CSV', variant: 'destructive' })
+                        }
+                      }}>Download errors CSV</Button>
+                    )}
+                    <Button onClick={async () => {
+                      if (!previewFile) return
+                      try {
+                        setContractsUploading(true)
+                        const res = await contractsApi.bulkUpload(previewFile, { create_missing_deal: true, replace_materialized: false, dry_run: false })
+                        toast({ title: 'Import complete', description: `Created: ${res.created}, Updated: ${res.updated}` })
+                        setPreviewOpen(false)
+                        fetchData()
+                      } catch (e: any) {
+                        console.error('Import failed', e)
+                        toast({ title: 'Import failed', description: e?.message || 'Server error', variant: 'destructive' })
+                      } finally { setContractsUploading(false) }
+                    }}>
+                      Import
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Contract edit dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1366,7 +1505,7 @@ export default function ContractsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Contracts ({filteredContracts.length})</span>
+            <span>Contracts ({contractsCount})</span>
           </CardTitle>
           <CardDescription>
             Complete overview of all trading contracts with status tracking

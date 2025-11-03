@@ -313,6 +313,9 @@ export interface Contract {
   quantity: string
   unit_of_measure: string
   entrega: string
+  // Delivery period (legacy single date kept for compatibility) and true ranges
+  delivery_period_start?: string
+  delivery_period_end?: string
   delivery_period: string
   date: string
   status: ContractStatus
@@ -356,7 +359,10 @@ export interface ContractCreateData {
   quantity: string
   unit_of_measure: string
   entrega: string
-  delivery_period: string
+  // Prefer true ranges; legacy single date is optional for backward compatibility
+  delivery_period_start?: string
+  delivery_period_end?: string
+  delivery_period?: string
   date: string
   notes?: string
 }

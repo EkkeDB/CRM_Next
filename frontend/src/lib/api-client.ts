@@ -454,6 +454,39 @@ export const contractsApi = {
     })
     return response.data
   },
+
+  // Preview first N rows via server-driven dry run plan
+  previewBulk: async (
+    file: File,
+    opts?: { preview_rows?: number; create_missing_deal?: boolean; replace_materialized?: boolean }
+  ): Promise<{ preview: { rows: any[]; summary: any }; errors: any[]; dry_run?: boolean }> => {
+    const form = new FormData()
+    form.append('file', file)
+    const params: any = { dry_run: 'true' }
+    if (opts?.preview_rows) params.preview_rows = String(opts.preview_rows)
+    if (opts?.create_missing_deal !== undefined) params.create_missing_deal = String(opts.create_missing_deal)
+    if (opts?.replace_materialized !== undefined) params.replace_materialized = String(opts.replace_materialized)
+    const response = await apiClient.post('/contracts/bulk_upload/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+    })
+    return response.data
+  },
+
+  // Downloadable CSV of dry-run errors. Re-uploads the same file but asks for CSV output.
+  bulkUploadErrorsCsv: async (file: File, opts?: { create_missing_deal?: boolean; replace_materialized?: boolean }): Promise<Blob> => {
+    const form = new FormData()
+    form.append('file', file)
+    const params: any = { dry_run: 'true', errors_format: 'csv' }
+    if (opts?.create_missing_deal !== undefined) params.create_missing_deal = String(opts.create_missing_deal)
+    if (opts?.replace_materialized !== undefined) params.replace_materialized = String(opts.replace_materialized)
+    const response = await apiClient.post('/contracts/bulk_upload/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+      responseType: 'blob' as any,
+    })
+    return response.data as Blob
+  },
 }
 
 // Counterparties API
@@ -501,6 +534,18 @@ export const counterpartiesApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data
+  },
+
+  // Optional helper to download CSV of dry-run errors for counterparties
+  bulkUploadErrorsCsv: async (file: File): Promise<Blob> => {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await apiClient.post('/counterparties/bulk_upload/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { errors_format: 'csv', format: undefined },
+      responseType: 'blob' as any,
+    })
+    return response.data as Blob
   },
 }
 

@@ -1,8 +1,5 @@
 {
-  "/dashboard/additives/page": "app/dashboard/additives/page.js",
-  "/dashboard/icoterms/page": "app/dashboard/icoterms/page.js",
-  "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
-  "/dashboard/commodities/page": "app/dashboard/commodities/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
   "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
-  "/dashboard/cost-centers/page": "app/dashboard/cost-centers/page.js"
+  "/dashboard/reports/page": "app/dashboard/reports/page.js"
 }

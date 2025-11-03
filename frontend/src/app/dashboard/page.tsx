@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
   DollarSign, 
@@ -8,6 +8,19 @@ import {
   CheckCircle, 
   Clock 
 } from 'lucide-react'
+import { contractsApi } from '@/lib/api-client'
+import type { DashboardStats } from '@/types'
+import {
+  BarChart as ReBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart as RePieChart,
+  Pie,
+  Cell,
+} from 'recharts'
 
 interface StatCardProps {
   title: string
@@ -79,6 +92,46 @@ function LoadingSkeleton() {
 }
 
 export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true)
+        const s = await contractsApi.getDashboardStats()
+        setStats(s)
+        setError(null)
+      } catch (e: any) {
+        console.error('Failed to load dashboard stats', e)
+        setError(e?.message || 'Failed to load stats')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const fmtCurrency = (val: number | string) => {
+    const n = typeof val === 'string' ? parseFloat(val) : val
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0)
+  }
+
+  const monthLabel = (iso: string) => {
+    try {
+      const d = new Date(iso)
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      return `${y}-${m}`
+    } catch { return iso }
+  }
+
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6']
+
+  if (loading) {
+    return <LoadingSkeleton />
+  }
 
   return (
     <div className="space-y-8 p-6">
@@ -103,27 +156,27 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Contracts"
-          value="0"
+          value={stats?.total_contracts ?? 0}
           icon={<FileText className="h-4 w-4 text-primary" />}
         />
         <StatCard
           title="Total Value"
-          value="$0.00"
+          value={fmtCurrency(stats?.total_value || 0)}
           icon={<DollarSign className="h-4 w-4 text-green-600" />}
         />
         <StatCard
           title="Active Contracts"
-          value="0"
+          value={stats?.active_contracts ?? 0}
           icon={<CheckCircle className="h-4 w-4 text-blue-600" />}
         />
         <StatCard
           title="Pending Contracts"
-          value="0"
+          value={stats?.pending_contracts ?? 0}
           icon={<Clock className="h-4 w-4 text-amber-600" />}
         />
       </div>
 
-      {/* Charts Placeholder */}
+      {/* Charts */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 shadow-sm">
           <CardHeader className="pb-4">
@@ -131,14 +184,22 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground">Contract values over the last 12 months</p>
           </CardHeader>
           <CardContent>
-            <div className="h-80 flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border-2 border-dashed border-blue-200 dark:border-blue-800">
-              <div className="text-center">
-                <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <p className="text-muted-foreground font-medium">Chart will appear here</p>
-                <p className="text-xs text-muted-foreground mt-1">Connect data source to display chart</p>
-              </div>
+            <div className="h-80">
+              {stats && stats.monthly_contract_values && stats.monthly_contract_values.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ReBarChart data={stats.monthly_contract_values.map((m: any) => ({
+                    month: monthLabel(m.month),
+                    total: parseFloat(m.total_value || 0),
+                  }))}>
+                    <XAxis dataKey="month" />
+                    <YAxis tickFormatter={(v) => `${Math.round(v/1000)}k`} />
+                    <Tooltip formatter={(v:any)=>fmtCurrency(v)} />
+                    <Bar dataKey="total" fill="#3b82f6" radius={[4,4,0,0]} />
+                  </ReBarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No data</div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -149,20 +210,30 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground">Breakdown of contract statuses</p>
           </CardHeader>
           <CardContent>
-            <div className="h-80 flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border-2 border-dashed border-green-200 dark:border-green-800">
-              <div className="text-center">
-                <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-                <p className="text-muted-foreground font-medium">Chart will appear here</p>
-                <p className="text-xs text-muted-foreground mt-1">Connect data source to display chart</p>
-              </div>
+            <div className="h-80">
+              {stats && stats.contract_status_distribution && stats.contract_status_distribution.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RePieChart>
+                    <Pie data={stats.contract_status_distribution}
+                         dataKey="count"
+                         nameKey="status"
+                         cx="50%" cy="50%" outerRadius={120}>
+                      {stats.contract_status_distribution.map((_: any, idx: number) => (
+                        <Cell key={idx} fill={colors[idx % colors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </RePieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No data</div>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Top lists placeholder */}
+      {/* Top lists */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="shadow-sm">
           <CardHeader className="pb-4">
@@ -170,15 +241,18 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground">Highest value trading partners</p>
           </CardHeader>
           <CardContent>
-            <div className="h-40 flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 rounded-lg border-2 border-dashed border-purple-200 dark:border-purple-800">
-              <div className="text-center">
-                <div className="h-10 w-10 mx-auto mb-2 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <p className="text-muted-foreground font-medium">Data will appear here</p>
-                <p className="text-xs text-muted-foreground mt-1">Connect data source to display list</p>
-              </div>
-            </div>
+            {stats && stats.top_counterparties && stats.top_counterparties.length > 0 ? (
+              <ul className="divide-y">
+                {stats.top_counterparties.map((c: any, idx: number) => (
+                  <li key={idx} className="py-2 flex items-center justify-between">
+                    <span className="text-sm text-foreground">{c.counterparty__counterparty_name}</span>
+                    <span className="text-sm font-medium">{fmtCurrency(c.total_value || 0)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm text-muted-foreground">No data</div>
+            )}
           </CardContent>
         </Card>
 
@@ -188,15 +262,18 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground">Most traded commodities</p>
           </CardHeader>
           <CardContent>
-            <div className="h-40 flex items-center justify-center bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg border-2 border-dashed border-orange-200 dark:border-orange-800">
-              <div className="text-center">
-                <div className="h-10 w-10 mx-auto mb-2 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                </div>
-                <p className="text-muted-foreground font-medium">Data will appear here</p>
-                <p className="text-xs text-muted-foreground mt-1">Connect data source to display list</p>
-              </div>
-            </div>
+            {stats && stats.top_commodities && stats.top_commodities.length > 0 ? (
+              <ul className="divide-y">
+                {stats.top_commodities.map((c: any, idx: number) => (
+                  <li key={idx} className="py-2 flex items-center justify-between">
+                    <span className="text-sm text-foreground">{c.commodity__commodity_name_short}</span>
+                    <span className="text-sm font-medium">{new Intl.NumberFormat('en-US').format(parseFloat(c.total_quantity || 0))}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm text-muted-foreground">No data</div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -85,9 +85,9 @@ export default function ReportsPage() {
     try {
       setLoading(true)
       const [contractsRes, counterpartiesRes, commoditiesRes, tradersRes] = await Promise.all([
-        contractsApi.getAll(),
-        counterpartiesApi.getAll(),
-        commoditiesApi.getAll(),
+        contractsApi.getAll({ page_size: 1000 }),
+        counterpartiesApi.getAll({ page_size: 1000 }),
+        commoditiesApi.getAll({ page_size: 1000 }),
         referenceDataApi.getTraders()
       ])
 

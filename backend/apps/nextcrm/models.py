@@ -351,7 +351,7 @@ class Deal(models.Model):
     commodity = models.ForeignKey('Commodity', on_delete=models.PROTECT)
     delivery_format = models.ForeignKey('Delivery_Format', on_delete=models.PROTECT)
     additive = models.ForeignKey('Additive', on_delete=models.PROTECT)
-    broker = models.ForeignKey('Broker', on_delete=models.PROTECT)
+    broker = models.ForeignKey('Broker', on_delete=models.PROTECT, null=True, blank=True)
     icoterm = models.ForeignKey('ICOTERM', on_delete=models.PROTECT)
     cost_center = models.ForeignKey('Cost_Center', on_delete=models.PROTECT)
 
@@ -475,7 +475,7 @@ class Contract(models.Model):
     commodity = models.ForeignKey(Commodity, on_delete=models.PROTECT)
     delivery_format = models.ForeignKey(Delivery_Format, on_delete=models.PROTECT)
     additive = models.ForeignKey(Additive, on_delete=models.PROTECT)
-    broker = models.ForeignKey(Broker, on_delete=models.PROTECT)
+    broker = models.ForeignKey(Broker, on_delete=models.PROTECT, null=True, blank=True)
     icoterm = models.ForeignKey(ICOTERM, on_delete=models.PROTECT)
     cost_center = models.ForeignKey(Cost_Center, on_delete=models.PROTECT)
 
