@@ -8,13 +8,16 @@ from .views import (
     LoginView, LogoutView, RegisterView, UserProfileView,
     ChangePasswordView, SecurityLogViewSet, AuditLogViewSet,
     UserViewSet, me, health_check, CustomTokenObtainPairView,
-    CustomTokenRefreshView, csrf_token
+    CustomTokenRefreshView, csrf_token, AuthZSimulateView,
+    RoleViewSet, UserRoleAssignmentViewSet, AuthZCatalogView
 )
 
 router = DefaultRouter()
 router.register(r'security-logs', SecurityLogViewSet, basename='security-logs')
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-logs')
 router.register(r'users', UserViewSet)
+router.register(r'roles', RoleViewSet)
+router.register(r'role-assignments', UserRoleAssignmentViewSet, basename='role-assignments')
 
 urlpatterns = [
     # Authentication endpoints
@@ -32,6 +35,10 @@ urlpatterns = [
     # Utility endpoints
     path('health/', health_check, name='health_check'),
     path('csrf/', csrf_token, name='csrf_token'),
+    # AuthZ simulator
+    path('authz/simulate/', AuthZSimulateView.as_view(), name='authz_simulate'),
+    # AuthZ catalog for matrix UI
+    path('authz/catalog/', AuthZCatalogView.as_view(), name='authz_catalog'),
     
     # Include router URLs
     path('', include(router.urls)),

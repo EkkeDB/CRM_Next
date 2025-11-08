@@ -5,6 +5,7 @@ Django REST Framework serializers for NextCRM models.
 import json
 from decimal import Decimal
 from rest_framework import serializers
+from apps.authentication.serializers_mixins import PolicyVisibleFieldsMixin
 from rest_framework.validators import UniqueTogetherValidator
 from .models import (
     Currency, Cost_Center, Trader, Commodity_Group, Commodity_Type,
@@ -267,7 +268,7 @@ class TradeOperationTypeSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ContractSerializer(serializers.ModelSerializer):
+class ContractSerializer(PolicyVisibleFieldsMixin, serializers.ModelSerializer):
     # Read-only fields for display
     trader_name = serializers.CharField(source='trader.trader_name', read_only=True)
     counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
@@ -284,7 +285,7 @@ class ContractSerializer(serializers.ModelSerializer):
         read_only_fields = ('contract_number', 'created_at', 'updated_at')
 
 
-class ContractListSerializer(serializers.ModelSerializer):
+class ContractListSerializer(PolicyVisibleFieldsMixin, serializers.ModelSerializer):
     """Simplified serializer for list views"""
     trader_name = serializers.CharField(source='trader.trader_name', read_only=True)
     counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)
@@ -361,7 +362,7 @@ class DealLineSerializer(serializers.ModelSerializer):
         read_only_fields = ('sync_status', 'contract_id', 'contract_number')
 
 
-class DealSerializer(serializers.ModelSerializer):
+class DealSerializer(PolicyVisibleFieldsMixin, serializers.ModelSerializer):
     lines = DealLineSerializer(many=True, read_only=True)
     trader_name = serializers.CharField(source='trader.trader_name', read_only=True)
     counterparty_name = serializers.CharField(source='counterparty.counterparty_name', read_only=True)

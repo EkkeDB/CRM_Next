@@ -5,7 +5,7 @@ Django admin configuration for authentication models.
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
-from .models import UserProfile, SecurityLog, AuditLog
+from .models import UserProfile, SecurityLog, AuditLog, Role, UserRoleAssignment
 
 
 class UserProfileInline(admin.StackedInline):
@@ -66,3 +66,18 @@ class AuditLogAdmin(admin.ModelAdmin):
 # Re-register UserAdmin
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'updated_at')
+    search_fields = ('name', 'description')
+    ordering = ('name',)
+
+
+@admin.register(UserRoleAssignment)
+class UserRoleAssignmentAdmin(admin.ModelAdmin):
+    list_display = ('user', 'role', 'is_active', 'updated_at')
+    list_filter = ('is_active', 'role')
+    search_fields = ('user__username', 'role__name')
+    autocomplete_fields = ('user', 'role')

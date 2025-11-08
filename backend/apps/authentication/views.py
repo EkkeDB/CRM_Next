@@ -19,12 +19,14 @@ from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from django.conf import settings
 
-from .models import UserProfile, SecurityLog, AuditLog
+from .models import UserProfile, SecurityLog, AuditLog, Role, UserRoleAssignment
 from .serializers import (
     UserSerializer, RegisterSerializer, LoginSerializer,
     ChangePasswordSerializer, SecurityLogSerializer, AuditLogSerializer,
-    ProfileUpdateSerializer, UserProfileSerializer
+    ProfileUpdateSerializer, UserProfileSerializer, RoleSerializer, UserRoleAssignmentSerializer
 )
+from .policy import resolve_policy, check_allowed
+from .permissions import ScopedPermission
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -229,6 +231,38 @@ class LogoutView(APIView):
         return response
 
 
+class AuthZSimulateView(APIView):
+    """Return resolved authorization policy for the current user or a specified user.
+
+    Optional query params:
+      - user_id: simulate for a specific user (admin/superuser only)
+      - resource: e.g., contracts
+      - action: e.g., read|write|export
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        target_user = request.user
+        uid = request.query_params.get('user_id')
+        if uid:
+            if not request.user.is_superuser:
+                return Response({'error': 'Only superusers can simulate other users'}, status=403)
+            try:
+                target_user = User.objects.get(pk=int(uid))
+            except Exception:
+                return Response({'error': 'user_id not found'}, status=404)
+
+        policy = resolve_policy(target_user)
+        resource = request.query_params.get('resource')
+        action = request.query_params.get('action')
+        decision = None
+        if resource and action:
+            allowed, reason = check_allowed(policy, resource, action)
+            decision = {'allowed': allowed, 'reason': reason, 'resource': resource, 'action': action}
+
+        return Response({'user_id': target_user.id, 'policy': policy, 'decision': decision})
+
+
 class UserProfileView(APIView):
     """User profile management"""
     permission_classes = [IsAuthenticated]
@@ -393,3 +427,112 @@ class UserViewSet(viewsets.ModelViewSet):
 def csrf_token(request):
     """Get CSRF token for frontend"""
     return JsonResponse({'csrfToken': get_token(request)})
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    """Manage roles (admin only)."""
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.is_superuser:
+            return Role.objects.all()
+        return Role.objects.none()
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=403)
+        # Allow partial updates even with PUT to simplify UI
+        kwargs['partial'] = True
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
+
+class UserRoleAssignmentViewSet(viewsets.ModelViewSet):
+    """Manage role assignments (admin only)."""
+    queryset = UserRoleAssignment.objects.select_related('user', 'role').all()
+    serializer_class = UserRoleAssignmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.is_superuser:
+            return self.queryset
+        return self.queryset.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
+
+class AuthZCatalogView(APIView):
+    """Return a normalized catalog of resources and actions for building RBAC matrices.
+
+    Derives from ScopedPermission.ACTION_MAP and emits, per resource, the supported actions
+    and the corresponding tokens to toggle in Role.permissions.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Collect resource->raw actions from ACTION_MAP
+        raw: dict[str, dict[str, dict]] = {}
+        for view_name, acts in getattr(ScopedPermission, 'ACTION_MAP', {}).items():
+            for action_name, (resource, action) in acts.items():
+                if not resource:
+                    continue
+                key = 'export' if (resource == 'exports' or action == 'run') else action
+                bucket = raw.setdefault(resource, {})
+                entry = bucket.setdefault(key, {'usages': []})
+                entry['usages'].append(f"{view_name}.{action_name}")
+
+        # Build structured response with tokens
+        resources = []
+        for resource, actions in sorted(raw.items()):
+            action_items = []
+            for a, meta in sorted(actions.items()):
+                # Token: resource:action, except export -> exports:run
+                if a == 'export':
+                    token = 'exports:run' if resource == 'exports' else f'{resource}:{a}'
+                else:
+                    token = f'{resource}:{a}'
+                action_items.append({
+                    'key': a,
+                    'label': a.capitalize(),
+                    'token': token,
+                    'usages': sorted(meta.get('usages', [])),
+                })
+            resources.append({
+                'key': resource,
+                'label': resource.replace('_', ' ').title(),
+                'actions': action_items,
+            })
+
+        data = {
+            'resources': resources,
+            'action_labels': {
+                'read': 'Read',
+                'write': 'Write',
+                'export': 'Export',
+            }
+        }
+        return Response(data)

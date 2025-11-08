@@ -7,7 +7,24 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from .models import UserProfile, SecurityLog, AuditLog
+from .models import UserProfile, SecurityLog, AuditLog, Role, UserRoleAssignment
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ['id', 'name', 'description', 'permissions', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class UserRoleAssignmentSerializer(serializers.ModelSerializer):
+    role_name = serializers.CharField(source='role.name', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = UserRoleAssignment
+        fields = ['id', 'user', 'username', 'role', 'role_name', 'constraints', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'username', 'role_name']
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -23,12 +40,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_active', 'date_joined', 'last_login', 'profile'
+            'is_active', 'is_superuser', 'date_joined', 'last_login', 'profile'
         ]
         read_only_fields = ['id', 'date_joined', 'last_login']
 

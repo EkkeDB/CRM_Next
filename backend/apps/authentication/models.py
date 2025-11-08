@@ -122,3 +122,44 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} - {self.model_name} - {self.user} - {self.timestamp}"
+
+
+class Role(models.Model):
+    """Coarse role with a set of allowed permissions (resource:action strings)."""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    permissions = models.JSONField(default=list)  # e.g., ["contracts:read","contracts:write","exports:run"]
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'auth_roles'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class UserRoleAssignment(models.Model):
+    """Assign a role to a user with optional attribute constraints (ABAC)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='role_assignments')
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='assignments')
+    constraints = models.JSONField(default=dict, blank=True)
+    # Example constraints schema:
+    # {"centers":[1,2],"commodities":["seeds","meal"],"date_window":{"months_back":12},
+    #  "max_export_rows":5000,"visible_fields":["contract_number","price","quantity","status"]}
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'auth_user_role_assignments'
+        ordering = ['user_id']
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['role']),
+        ]
+
+    def __str__(self):
+        return f"{self.user} -> {self.role}"

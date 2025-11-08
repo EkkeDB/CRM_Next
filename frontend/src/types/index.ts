@@ -20,6 +20,7 @@ export interface User {
   first_name: string
   last_name: string
   is_active: boolean
+  is_superuser?: boolean
   date_joined: string
   last_login: string | null
   profile: UserProfile
@@ -415,6 +416,29 @@ export interface AuditLog {
   changes: Record<string, any>
   ip_address: string
   timestamp: string
+}
+
+// Authorization Types
+export interface Role {
+  id: number
+  name: string
+  description: string
+  permissions: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface UserRoleAssignment {
+  id: number
+  user: number
+  username?: string
+  role: number
+  role_name?: string
+  constraints: Record<string, any>
+  is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 // Form Types

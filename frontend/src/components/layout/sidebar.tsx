@@ -78,7 +78,9 @@ const menuSections = [
     title: 'System',
     items: [
       { href: '/dashboard/reports', label: 'Reports', icon: BarChart2 },
-      { href: '/dashboard/settings', label: 'Settings', icon: Settings }
+      { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+      { href: '/dashboard/admin/users', label: 'Users & Auth', icon: Users },
+      { href: '/dashboard/admin/roles', label: 'Roles Matrix', icon: Users }
     ]
   }
 ]

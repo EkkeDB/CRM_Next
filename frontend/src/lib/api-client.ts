@@ -19,6 +19,8 @@ import type {
   CounterpartyFacility,
   FacilityConsumption,
   CounterpartyNote,
+  Role,
+  UserRoleAssignment,
 } from '@/types'
 
 // API Configuration
@@ -671,6 +673,52 @@ export const contactsApi = {
 
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(`/contacts/${id}/`)
+  },
+}
+
+// AuthZ management API (admin)
+export const rolesApi = {
+  getAll: async (): Promise<Role[]> => {
+    const response = await apiClient.get('/auth/roles/', { params: { page_size: 1000 } })
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.results ?? [])
+  },
+  create: async (data: Partial<Role>): Promise<Role> => {
+    const response = await apiClient.post('/auth/roles/', data)
+    return response.data
+  },
+  update: async (id: number, data: Partial<Role>): Promise<Role> => {
+    const response = await apiClient.patch(`/auth/roles/${id}/`, data)
+    return response.data
+  },
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/auth/roles/${id}/`)
+  },
+}
+
+export const roleAssignmentsApi = {
+  getAll: async (): Promise<UserRoleAssignment[]> => {
+    const response = await apiClient.get('/auth/role-assignments/', { params: { page_size: 1000 } })
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.results ?? [])
+  },
+  create: async (data: Partial<UserRoleAssignment>): Promise<UserRoleAssignment> => {
+    const response = await apiClient.post('/auth/role-assignments/', data)
+    return response.data
+  },
+  update: async (id: number, data: Partial<UserRoleAssignment>): Promise<UserRoleAssignment> => {
+    const response = await apiClient.put(`/auth/role-assignments/${id}/`, data)
+    return response.data
+  },
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/auth/role-assignments/${id}/`)
+  },
+}
+
+export const authzApi = {
+  simulate: async (params?: { user_id?: number; resource?: string; action?: string }): Promise<any> => {
+    const response = await apiClient.get('/auth/authz/simulate/', { params })
+    return response.data
   },
 }
 
