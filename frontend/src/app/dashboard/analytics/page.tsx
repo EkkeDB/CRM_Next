@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import UiGuard from '@/components/security/UiGuard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -300,13 +301,16 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-      </div>
+      <UiGuard token="ui:analytics">
+        <div className="flex justify-center items-center h-96">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+        </div>
+      </UiGuard>
     )
   }
 
   return (
+    <UiGuard token="ui:analytics">
     <div className="container mx-auto py-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -606,5 +610,6 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }

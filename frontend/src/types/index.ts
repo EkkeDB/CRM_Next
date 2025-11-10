@@ -374,6 +374,7 @@ export interface DashboardStats {
   total_value: string
   active_contracts: number
   pending_contracts: number
+  available_years?: number[]
   top_counterparties: Array<{
     counterparty__counterparty_name: string
     total_value: string
@@ -386,12 +387,24 @@ export interface DashboardStats {
   }>
   monthly_contract_values: Array<{
     month: string
-    total_value: string
-    contract_count: number
+    total_quantity: string | number
+    avg_price: string | number
+    total_value?: string | number
+    contract_count?: number
   }>
-  contract_status_distribution: Array<{
-    status: string
-    count: number
+  commodities?: string[]
+  monthly_volume_breakdown?: Array<{
+    month: string
+    breakdown: Array<{ commodity: string; volume: number | string }>
+  }>
+  monthly_avg_price_breakdown?: Array<{
+    month: string
+    breakdown: Array<{ commodity: string; avg_price: number | string }>
+  }>
+  commodity_share?: Array<{
+    commodity: string
+    share: number
+    volume: string | number
   }>
 }
 

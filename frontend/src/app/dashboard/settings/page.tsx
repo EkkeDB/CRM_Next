@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import UiGuard from '@/components/security/UiGuard'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -252,6 +253,7 @@ export default function SettingsPage() {
   ]
 
   return (
+    <UiGuard token="ui:settings">
     <div className="container mx-auto py-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -728,5 +730,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }

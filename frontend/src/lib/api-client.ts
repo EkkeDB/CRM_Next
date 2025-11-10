@@ -435,8 +435,11 @@ export const contractsApi = {
     return response.data
   },
 
-  getDashboardStats: async (): Promise<DashboardStats> => {
-    const response = await apiClient.get('/contracts/dashboard_stats/')
+  getDashboardStats: async (params?: { years?: number[]; commodity_ids?: number[] }): Promise<DashboardStats> => {
+    const q: any = {}
+    if (params?.years && params.years.length) q.years = params.years.join(',')
+    if (params?.commodity_ids && params.commodity_ids.length) q.commodities = params.commodity_ids.join(',')
+    const response = await apiClient.get('/contracts/dashboard_stats/', { params: q })
     return response.data
   },
   downloadTemplate: async (): Promise<Blob> => {

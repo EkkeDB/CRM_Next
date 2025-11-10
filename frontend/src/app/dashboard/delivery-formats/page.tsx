@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import UiGuard from '@/components/security/UiGuard'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -74,6 +75,7 @@ export default function DeliveryFormatsPage() {
   )
 
   return (
+    <UiGuard token="ui:delivery_formats">
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -209,5 +211,6 @@ export default function DeliveryFormatsPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }

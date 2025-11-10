@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import UiGuard from '@/components/security/UiGuard'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -115,13 +116,16 @@ export default function SociedadesPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-      </div>
+      <UiGuard token="ui:sociedades">
+        <div className="flex justify-center items-center h-96">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+        </div>
+      </UiGuard>
     )
   }
 
   return (
+    <UiGuard token="ui:sociedades">
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -332,5 +336,6 @@ export default function SociedadesPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }

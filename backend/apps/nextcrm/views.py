@@ -17,7 +17,7 @@ from django.db.utils import DataError
 from django.utils import timezone
 from django.utils.timezone import now
 from datetime import timedelta
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, ExtractYear
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 from django.core.exceptions import ValidationError
@@ -600,7 +600,38 @@ class ContractViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='dashboard_stats')
     def dashboard_stats(self, request):
-        qs = self.get_queryset()
+        qs_scoped = self.get_queryset()
+        # Compute available years from scoped queryset (before user filters)
+        years_qs = qs_scoped.annotate(year=ExtractYear('date')).values('year').order_by('year').distinct()
+        available_years = [r['year'] for r in years_qs if r.get('year') is not None]
+        qs = qs_scoped
+
+        # Optional filters: years (csv), commodities (ids or names csv)
+        years_param = request.query_params.get('years')
+        if years_param:
+            try:
+                years = [int(y) for y in years_param.split(',') if y.strip()]
+                if years:
+                    qs = qs.filter(date__year__in=years)
+            except Exception:
+                pass
+        commodities_param = request.query_params.get('commodities')
+        if commodities_param:
+            parts = [p.strip() for p in commodities_param.split(',') if p.strip()]
+            ids = []
+            names = []
+            for p in parts:
+                if p.isdigit():
+                    ids.append(int(p))
+                else:
+                    names.append(p)
+            cond = Q()
+            if ids:
+                cond |= Q(commodity_id__in=ids)
+            if names:
+                cond |= Q(commodity__commodity_name_short__in=names)
+            if cond:
+                qs = qs.filter(cond)
 
         total_contracts = qs.count()
         total_value = qs.aggregate(
@@ -612,40 +643,71 @@ class ContractViewSet(viewsets.ModelViewSet):
 
         top_counterparties_qs = (
             qs.values('counterparty__counterparty_name')
-              .annotate(value=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=20, decimal_places=2)))
-              .order_by('-value')[:5]
+              .annotate(total_value=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=20, decimal_places=2)),
+                        contract_count=Count('id'))
+              .order_by('-total_value')[:5]
         )
-        top_counterparties = [
-            {'name': r['counterparty__counterparty_name'], 'value': r['value'] or 0}
-            for r in top_counterparties_qs
-        ]
+        top_counterparties = list(top_counterparties_qs)
 
         top_commodities_qs = (
             qs.values('commodity__commodity_name_short')
-              .annotate(value=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=20, decimal_places=2)))
-              .order_by('-value')[:5]
+              .annotate(total_quantity=Sum('quantity'), contract_count=Count('id'))
+              .order_by('-total_quantity')[:5]
         )
-        top_commodities = [
-            {'name': r['commodity__commodity_name_short'], 'value': r['value'] or 0}
-            for r in top_commodities_qs
-        ]
+        top_commodities = list(top_commodities_qs)
 
-        monthly_qs = (
+        # Monthly volume and weighted average price by commodity
+        monthly_by_com = (
             qs.annotate(month=TruncMonth('date'))
-              .values('month')
-              .annotate(value=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=20, decimal_places=2)))
-              .order_by('month')
+              .values('month', 'commodity__commodity_name_short')
+              .annotate(total_value=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=20, decimal_places=2)),
+                        total_quantity=Sum('quantity'))
+              .order_by('month', 'commodity__commodity_name_short')
         )
-        monthly_contract_values = [
-            {'month': r['month'], 'value': r['value'] or 0}
-            for r in monthly_qs
-        ]
+        monthly_volume_breakdown = []
+        monthly_avg_price_breakdown = []
+        tmp_month = None
+        vol_bucket = []
+        avg_bucket = []
+        commodity_names_set = set()
+        for r in monthly_by_com:
+            m = r['month']
+            if tmp_month is None:
+                tmp_month = m
+            if m != tmp_month:
+                monthly_volume_breakdown.append({'month': tmp_month, 'breakdown': vol_bucket})
+                monthly_avg_price_breakdown.append({'month': tmp_month, 'breakdown': avg_bucket})
+                vol_bucket = []
+                avg_bucket = []
+                tmp_month = m
+            name = r['commodity__commodity_name_short'] or 'Unknown'
+            commodity_names_set.add(name)
+            qty = r.get('total_quantity') or 0
+            val = r.get('total_value') or 0
+            avg = (val / qty) if qty else 0
+            vol_bucket.append({'commodity': name, 'volume': qty})
+            avg_bucket.append({'commodity': name, 'avg_price': avg})
+        if tmp_month is not None:
+            monthly_volume_breakdown.append({'month': tmp_month, 'breakdown': vol_bucket})
+            monthly_avg_price_breakdown.append({'month': tmp_month, 'breakdown': avg_bucket})
+        commodity_names = sorted(list(commodity_names_set))
 
-        status_qs = qs.values('status').annotate(count=Count('id')).order_by('-count')
-        contract_status_distribution = [
-            {'status': r['status'], 'count': r['count']}
-            for r in status_qs
-        ]
+        # Commodity share by volume
+        com_share_qs = (
+            qs.values('commodity__commodity_name_short')
+              .annotate(total_quantity=Sum('quantity'))
+              .order_by('-total_quantity')
+        )
+        total_qty = sum((r['total_quantity'] or 0) for r in com_share_qs)
+        commodity_share = []
+        for r in com_share_qs:
+            qty = r['total_quantity'] or 0
+            share = float(qty) / float(total_qty) * 100 if total_qty else 0
+            commodity_share.append({
+                'commodity': r['commodity__commodity_name_short'],
+                'share': share,
+                'volume': qty,
+            })
 
         payload = {
             'total_contracts': total_contracts,
@@ -654,8 +716,12 @@ class ContractViewSet(viewsets.ModelViewSet):
             'pending_contracts': pending_contracts,
             'top_counterparties': top_counterparties,
             'top_commodities': top_commodities,
-            'monthly_contract_values': monthly_contract_values,
-            'contract_status_distribution': contract_status_distribution,
+            'monthly_contract_values': [],
+            'monthly_volume_breakdown': monthly_volume_breakdown,
+            'monthly_avg_price_breakdown': monthly_avg_price_breakdown,
+            'commodities': commodity_names,
+            'commodity_share': commodity_share,
+            'available_years': available_years,
         }
         serializer = DashboardStatsSerializer(payload)
         return Response(serializer.data)

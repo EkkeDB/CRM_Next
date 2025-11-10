@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import UiGuard from '@/components/security/UiGuard'
 import { Building, Users, Factory, FileText, ArrowLeft, MapPin, Plus, Edit2, Save, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { counterpartiesApi, contactsApi, contractsApi, counterpartyNotesApi } from '@/lib/api-client'
@@ -95,14 +96,17 @@ export default function CustomerDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-      </div>
+      <UiGuard token="ui:counterparties">
+        <div className="flex justify-center items-center h-96">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+        </div>
+      </UiGuard>
     )
   }
 
   if (error) {
     return (
+      <UiGuard token="ui:counterparties">
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -124,12 +128,14 @@ export default function CustomerDetailPage() {
           </CardContent>
         </Card>
       </div>
+      </UiGuard>
     )
   }
 
   if (!counterparty) return null
 
   return (
+    <UiGuard token="ui:counterparties">
     <div className="container mx-auto py-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -359,6 +365,7 @@ export default function CustomerDetailPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }
 

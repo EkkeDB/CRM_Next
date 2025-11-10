@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import UiGuard from '@/components/security/UiGuard'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -210,13 +211,16 @@ export default function CommoditiesPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-      </div>
+      <UiGuard token="ui:commodities">
+        <div className="flex justify-center items-center h-96">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+        </div>
+      </UiGuard>
     )
   }
 
   return (
+    <UiGuard token="ui:commodities">
     <div className="container mx-auto py-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -501,5 +505,6 @@ export default function CommoditiesPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }

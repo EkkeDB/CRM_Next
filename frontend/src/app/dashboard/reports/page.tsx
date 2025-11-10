@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
+import UiGuard from '@/components/security/UiGuard'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -30,8 +31,14 @@ interface ReportData {
   contractsByStatus: { status: string; count: number; value: number }[]
   contractsByMonth: { month: string; count: number; value: number }[]
   topCounterparties: { name: string; contracts: number; value: number }[]
-  topCommodities: { name: string; contracts: number; volume: number }[]
+  topCommodities: { name: string; contracts: number; volume: number; value?: number }[]
   traderPerformance: { name: string; contracts: number; value: number }[]
+  counterpartyShare?: { name: string; value: number; share: number }[]
+  costCenterVolume?: { name: string; volume: number }[]
+  sociedadValue?: { name: string; value: number }[]
+  icotermUsage?: { name: string; count: number }[]
+  brokerFees?: { name: string; fee: number }[]
+  priceTrend?: { month: string; [commodity: string]: number }[]
   summary: {
     totalContracts: number
     totalValue: number
@@ -43,11 +50,15 @@ interface ReportData {
 
 const REPORT_TYPES = [
   { value: 'overview', label: 'Business Overview' },
-  { value: 'contracts', label: 'Contract Analysis' },
-  { value: 'counterparties', label: 'Counterparty Report' },
-  { value: 'commodities', label: 'Commodity Report' },
-  { value: 'traders', label: 'Trader Performance' },
-  { value: 'financial', label: 'Financial Summary' },
+  { value: 'contract-analysis', label: 'Contract Analysis' },
+  { value: 'commodity-performance', label: 'Commodity Performance' },
+  { value: 'counterparty-concentration', label: 'Counterparty Concentration' },
+  { value: 'trader-performance', label: 'Trader Performance' },
+  { value: 'cost-center', label: 'Cost Center Volume' },
+  { value: 'sociedades', label: 'Sociedad Value' },
+  { value: 'icoterms', label: 'ICOTERM Usage' },
+  { value: 'broker-fees', label: 'Broker Fees' },
+  { value: 'price-trend', label: 'Price Trend by Commodity' },
 ]
 
 const TIME_PERIODS = [
@@ -189,15 +200,18 @@ export default function ReportsPage() {
       filteredContracts.forEach(contract => {
         const commodityName = contract.commodity_name || 'Unknown'
         if (!commodityData.has(commodityName)) {
-          commodityData.set(commodityName, { contracts: 0, volume: 0 })
+          commodityData.set(commodityName, { contracts: 0, volume: 0, value: 0 })
         }
         const data = commodityData.get(commodityName)
         data.contracts++
-        data.volume += parseFloat(contract.quantity)
+        const qty = parseFloat(contract.quantity)
+        const price = parseFloat(contract.price)
+        data.volume += qty
+        data.value += qty * price
       })
 
       const topCommodities = Array.from(commodityData.entries())
-        .map(([name, data]) => ({ name, contracts: data.contracts, volume: data.volume }))
+        .map(([name, data]) => ({ name, contracts: data.contracts, volume: data.volume, value: data.value }))
         .sort((a, b) => b.volume - a.volume)
         .slice(0, 10)
 
@@ -228,12 +242,70 @@ export default function ReportsPage() {
         completedContracts: filteredContracts.filter(c => c.status === 'completed').length,
       }
 
+      const totalValAll = filteredContracts.reduce((sum, c) => sum + (parseFloat(c.price) * parseFloat(c.quantity)), 0)
+      const counterpartyShare = totalValAll > 0 ? topCounterparties.map(c => ({ name: c.name, value: c.value, share: (c.value / totalValAll) * 100 })) : []
+
+      const ccMap = new Map<string, number>()
+      filteredContracts.forEach(c => {
+        const cc = (c as any).cost_center_name || 'Unknown'
+        const qty = parseFloat(c.quantity)
+        ccMap.set(cc, (ccMap.get(cc) || 0) + qty)
+      })
+      const costCenterVolume = Array.from(ccMap.entries()).map(([name, volume]) => ({ name, volume })).sort((a,b)=>b.volume-a.volume)
+
+      const socMap = new Map<string, number>()
+      filteredContracts.forEach(c => {
+        const s = (c as any).sociedad_name || 'Unknown'
+        const qty = parseFloat(c.quantity); const price = parseFloat(c.price)
+        socMap.set(s, (socMap.get(s) || 0) + qty*price)
+      })
+      const sociedadValue = Array.from(socMap.entries()).map(([name, value]) => ({ name, value })).sort((a,b)=>b.value-a.value)
+
+      const icoMap = new Map<string, number>()
+      filteredContracts.forEach(c => {
+        const n = (c as any).icoterm || (c as any).icoterm_name || 'Unknown'
+        icoMap.set(n, (icoMap.get(n) || 0) + 1)
+      })
+      const icotermUsage = Array.from(icoMap.entries()).map(([name, count]) => ({ name, count })).sort((a,b)=>b.count-a.count)
+
+      const brokerMap = new Map<string, number>()
+      filteredContracts.forEach(c => {
+        const b = (c as any).broker_name || 'Unknown'
+        const fee = parseFloat((c as any).broker_fee || 0)
+        brokerMap.set(b, (brokerMap.get(b) || 0) + fee)
+      })
+      const brokerFees = Array.from(brokerMap.entries()).map(([name, fee]) => ({ name, fee })).sort((a,b)=>b.fee-a.fee)
+
+      const priceTrendMap = new Map<string, Map<string, {sum:number;qty:number}>>()
+      filteredContracts.forEach(c => {
+        const month = (c.date || '').slice(0,7)
+        const com = c.commodity_name || 'Unknown'
+        const price = parseFloat(c.price); const qty = parseFloat(c.quantity)
+        if (!priceTrendMap.has(month)) priceTrendMap.set(month, new Map())
+        const inner = priceTrendMap.get(month)!
+        const cur = inner.get(com) || { sum: 0, qty: 0 }
+        cur.sum += price*qty; cur.qty += qty
+        inner.set(com, cur)
+      })
+      const priceTrend: { month: string; [commodity: string]: number }[] = []
+      Array.from(priceTrendMap.entries()).sort(([a],[b])=> a.localeCompare(b)).forEach(([month, inner]) => {
+        const row: any = { month }
+        inner.forEach((agg, com) => { row[com] = agg.qty>0 ? agg.sum/agg.qty : 0 })
+        priceTrend.push(row)
+      })
+
       setReportData({
         contractsByStatus,
         contractsByMonth,
         topCounterparties,
         topCommodities,
         traderPerformance,
+        counterpartyShare,
+        costCenterVolume,
+        sociedadValue,
+        icotermUsage,
+        brokerFees,
+        priceTrend,
         summary
       })
 
@@ -271,13 +343,16 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-      </div>
+      <UiGuard token="ui:reports">
+        <div className="flex justify-center items-center h-96">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+        </div>
+      </UiGuard>
     )
   }
 
   return (
+    <UiGuard token="ui:reports">
     <div className="container mx-auto py-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -411,7 +486,7 @@ export default function ReportsPage() {
       )}
 
       {/* Report Content */}
-      {reportData && !generating && (
+      {reportData && !generating && reportType === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Contract Status Breakdown */}
           <Card>
@@ -544,6 +619,226 @@ export default function ReportsPage() {
         </div>
       )}
 
+      {reportData && !generating && reportType === 'commodity-performance' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" />Top Commodities by Volume</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Commodity</TableHead>
+                    <TableHead>Contracts</TableHead>
+                    <TableHead>Volume</TableHead>
+                    <TableHead>Value</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportData.topCommodities.map((item, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>{formatNumber(item.contracts)}</TableCell>
+                      <TableCell>{formatNumber(item.volume)} MT</TableCell>
+                      <TableCell>{formatCurrency(item.value || 0)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" />Price Trend (Avg)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Month</TableHead>
+                    {reportData.priceTrend && Object.keys(reportData.priceTrend[0] || {}).filter(k=>k!=='month').map(k => (
+                      <TableHead key={k}>{k}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportData.priceTrend?.map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium">{row.month}</TableCell>
+                      {Object.keys(row).filter(k=>k!=='month').map(k => (
+                        <TableCell key={k}>{formatCurrency(Number(row[k]))}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {reportData && !generating && reportType === 'counterparty-concentration' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Building className="h-5 w-5" />Counterparty Concentration (by value)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Counterparty</TableHead>
+                  <TableHead>Value</TableHead>
+                  <TableHead>Share</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.counterpartyShare?.map((c, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell>{formatCurrency(c.value)}</TableCell>
+                    <TableCell>{c.share.toFixed(1)}%</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {reportData && !generating && reportType === 'trader-performance' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Trader Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Trader</TableHead>
+                  <TableHead>Contracts</TableHead>
+                  <TableHead>Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.traderPerformance.map((t, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{t.name}</TableCell>
+                    <TableCell>{formatNumber(t.contracts)}</TableCell>
+                    <TableCell>{formatCurrency(t.value)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {reportData && !generating && reportType === 'cost-center' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" />Cost Center Volume</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cost Center</TableHead>
+                  <TableHead>Volume (MT)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.costCenterVolume?.map((r, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell>{formatNumber(r.volume)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {reportData && !generating && reportType === 'sociedades' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" />Sociedad Value</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sociedad</TableHead>
+                  <TableHead>Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.sociedadValue?.map((r, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell>{formatCurrency(r.value)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {reportData && !generating && reportType === 'icoterms' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" />ICOTERM Usage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ICOTERM</TableHead>
+                  <TableHead>Count</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.icotermUsage?.map((r, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell>{formatNumber(r.count)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {reportData && !generating && reportType === 'broker-fees' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" />Broker Fees</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Broker</TableHead>
+                  <TableHead>Total Fee</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.brokerFees?.map((r, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell>{formatCurrency(r.fee)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+
       {/* No Data State */}
       {!reportData && !generating && !loading && (
         <Card>
@@ -568,5 +863,6 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }

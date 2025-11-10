@@ -2,6 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { authzApi } from '@/lib/api-client'
+import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,7 +34,7 @@ interface SidebarProps {
   onCollapse: () => void
 }
 
-const menuSections = [
+const baseMenuSections = [
   {
     title: 'Main',
     items: [
@@ -43,9 +46,6 @@ const menuSections = [
     items: [
       { href: '/dashboard/contracts', label: 'Contracts', icon: FileText },
       { href: '/dashboard/counterparties', label: 'Counterparties', icon: Building },
-      { href: '/dashboard/counterparties/factories', label: 'Factories', icon: Building2 },
-      { href: '/dashboard/traders', label: 'Traders', icon: Users },
-      { href: '/dashboard/contacts', label: 'Contacts', icon: Contact },
     ]
   },
   {
@@ -55,6 +55,9 @@ const menuSections = [
       { href: '/dashboard/cost-centers', label: 'Cost Centers', icon: Briefcase },
       { href: '/dashboard/sociedades', label: 'Sociedades', icon: Building2 },
       { href: '/dashboard/trade-operation-types', label: 'Trade Operations', icon: Shuffle },
+      { href: '/dashboard/counterparties/factories', label: 'Factories', icon: Building2 },
+      { href: '/dashboard/traders', label: 'Traders', icon: Users },
+      { href: '/dashboard/contacts', label: 'Contacts', icon: Contact },
     ]
   },
   {
@@ -85,8 +88,36 @@ const menuSections = [
   }
 ]
 
+const routeToToken: Record<string, string> = {
+  '/dashboard': 'ui:dashboard',
+  '/dashboard/contracts': 'ui:contracts',
+  '/dashboard/counterparties': 'ui:counterparties',
+  '/dashboard/counterparties/factories': 'ui:factories',
+  '/dashboard/traders': 'ui:traders',
+  '/dashboard/contacts': 'ui:contacts',
+  '/dashboard/currencies': 'ui:currencies',
+  '/dashboard/cost-centers': 'ui:cost_centers',
+  '/dashboard/sociedades': 'ui:sociedades',
+  '/dashboard/trade-operation-types': 'ui:trade_operations',
+  '/dashboard/reports': 'ui:reports',
+  '/dashboard/admin/roles': 'ui:roles',
+  '/dashboard/admin/users': 'ui:users',
+}
+
 export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const [perms, setPerms] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    authzApi.simulate().then((res:any) => {
+      if (!mounted) return
+      const p = (res?.policy?.permissions || []) as string[]
+      setPerms(p)
+    }).catch(()=> setPerms(null))
+    return () => { mounted = false }
+  }, [])
 
   return (
     <aside
@@ -109,7 +140,7 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
         </Button>
       </div>
       <nav className="flex-1 space-y-2 px-2 py-4">
-        {menuSections.map((section, sectionIndex) => (
+        {baseMenuSections.map((section, sectionIndex) => (
           <div key={section.title} className="space-y-1">
             {!collapsed && (
               <div className="px-3 py-2">
@@ -121,7 +152,14 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
             {collapsed && sectionIndex > 0 && (
               <div className="my-2 border-t border-border" />
             )}
-            {section.items.map(item => {
+            {section.items
+              .filter(item => {
+                // show all while loading perms or if user is superuser
+                if (!perms || user?.is_superuser) return true
+                const token = routeToToken[item.href] || ''
+                return token ? perms.includes(token) : true
+              })
+              .map(item => {
               const active = pathname === item.href
               const Icon = item.icon
               return (

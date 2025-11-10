@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useEffect, useMemo, useState } from 'react'
+import UiGuard from '@/components/security/UiGuard'
 import { rolesApi } from '@/lib/api-client'
 import type { Role } from '@/types'
 
 type CatalogAction = { key: string; label: string; token: string }
 type CatalogResource = { key: string; label: string; actions: CatalogAction[] }
-type Catalog = { resources: CatalogResource[]; action_labels: Record<string, string> }
+type Catalog = { resources: CatalogResource[]; action_labels: Record<string, string>; ui_pages?: { key:string; label:string; token:string }[] }
 
 const fetchCatalog = async (): Promise<Catalog> => {
   const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -77,6 +78,7 @@ export default function RolesMatrixPage() {
   }
 
   return (
+    <UiGuard token="ui:roles">
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Roles & Matrix</h1>
       {error && <div className="text-red-600">{error}</div>}
@@ -161,9 +163,12 @@ export default function RolesMatrixPage() {
                 </table>
               </div>
             )}
+
+            {/* UI pages access removed: UI visibility is managed per-user on Users & Auth */}
           </div>
         </div>
       )}
     </div>
+    </UiGuard>
   )
 }

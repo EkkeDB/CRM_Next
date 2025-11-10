@@ -533,6 +533,35 @@ class AuthZCatalogView(APIView):
                 'read': 'Read',
                 'write': 'Write',
                 'export': 'Export',
-            }
+            },
+            # Static UI pages catalog for Role Matrix UI
+            'ui_pages': [
+                # Core
+                {'key': 'dashboard', 'label': 'Dashboard', 'token': 'ui:dashboard'},
+                {'key': 'contracts', 'label': 'Contracts', 'token': 'ui:contracts'},
+                {'key': 'counterparties', 'label': 'Counterparties', 'token': 'ui:counterparties'},
+                # Reference & Entities
+                {'key': 'factories', 'label': 'Factories', 'token': 'ui:factories'},
+                {'key': 'traders', 'label': 'Traders', 'token': 'ui:traders'},
+                {'key': 'contacts', 'label': 'Contacts', 'token': 'ui:contacts'},
+                {'key': 'currencies', 'label': 'Currencies', 'token': 'ui:currencies'},
+                {'key': 'cost_centers', 'label': 'Cost Centers', 'token': 'ui:cost_centers'},
+                {'key': 'sociedades', 'label': 'Sociedades', 'token': 'ui:sociedades'},
+                {'key': 'trade_operations', 'label': 'Trade Operations', 'token': 'ui:trade_operations'},
+                {'key': 'icoterms', 'label': 'ICOTERMS', 'token': 'ui:icoterms'},
+                {'key': 'delivery_formats', 'label': 'Delivery Formats', 'token': 'ui:delivery_formats'},
+                {'key': 'additives', 'label': 'Additives', 'token': 'ui:additives'},
+                # Commodities family
+                {'key': 'commodity_groups', 'label': 'Commodity Groups', 'token': 'ui:commodity_groups'},
+                {'key': 'commodity_types', 'label': 'Commodity Types', 'token': 'ui:commodity_types'},
+                {'key': 'commodity_subtypes', 'label': 'Commodity Subtypes', 'token': 'ui:commodity_subtypes'},
+                {'key': 'commodities', 'label': 'Commodities', 'token': 'ui:commodities'},
+                # System
+                {'key': 'reports', 'label': 'Reports', 'token': 'ui:reports'},
+                {'key': 'settings', 'label': 'Settings', 'token': 'ui:settings'},
+                {'key': 'analytics', 'label': 'Analytics', 'token': 'ui:analytics'},
+                {'key': 'roles', 'label': 'Roles Matrix', 'token': 'ui:roles'},
+                {'key': 'users', 'label': 'Users & Auth', 'token': 'ui:users'},
+            ]
         }
         return Response(data)

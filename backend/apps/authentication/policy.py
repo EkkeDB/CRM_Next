@@ -106,6 +106,15 @@ def resolve_policy(user: User) -> Dict[str, Any]:
             s3 = set([str(v) for v in vf if v])
             visible_fields = s3 if visible_fields is None else (visible_fields & s3)
 
+        # ui pages (per-user visibility tokens)
+        ui_pages = c.get('ui_pages')
+        if isinstance(ui_pages, list) and ui_pages:
+            for p in ui_pages:
+                try:
+                    permissions.add(f"ui:{str(p)}")
+                except Exception:
+                    continue
+
     resolved = {
         'permissions': sorted(permissions),
         'centers': None if centers_unrestricted else sorted(centers or []),

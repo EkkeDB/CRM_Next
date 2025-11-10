@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import UiGuard from '@/components/security/UiGuard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -664,7 +665,8 @@ export default function ContractsPage() {
   }
 
   return (
-    <div className="container mx-auto py-6">
+    <UiGuard token="ui:contracts">
+      <div className="container mx-auto py-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -1713,7 +1715,8 @@ export default function ContractsPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </UiGuard>
   )
 }
 

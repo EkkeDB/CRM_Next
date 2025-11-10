@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react'
+import UiGuard from '@/components/security/UiGuard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
   DollarSign, 
@@ -9,6 +10,7 @@ import {
   Clock 
 } from 'lucide-react'
 import { contractsApi } from '@/lib/api-client'
+import MultiSelectList from '@/components/ui/multi-select-list'
 import type { DashboardStats } from '@/types'
 import {
   BarChart as ReBarChart,
@@ -17,9 +19,12 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  ComposedChart,
+  Line,
   PieChart as RePieChart,
   Pie,
   Cell,
+  TooltipProps,
 } from 'recharts'
 
 interface StatCardProps {
@@ -95,22 +100,51 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [years, setYears] = useState<Array<number | string>>([])
+  const [yearsOptions, setYearsOptions] = useState<{id:number; name:string}[]>([])
+  const [commodities, setCommodities] = useState<{id:number; name:string}[]>([])
+  const [selCommodityIds, setSelCommodityIds] = useState<Array<number | string>>([])
+
+  const loadStats = async (yrs: number[], commodityIds: number[]) => {
+    setLoading(true)
+    try {
+      const s = await contractsApi.getDashboardStats({ years: yrs, commodity_ids: commodityIds })
+      setStats(s)
+      setError(null)
+    } catch (e: any) {
+      console.error('Failed to load dashboard stats', e)
+      setError(e?.message || 'Failed to load stats')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const load = async () => {
+    const init = async () => {
+      // Initial stats without filters to learn available years
       try {
-        setLoading(true)
         const s = await contractsApi.getDashboardStats()
         setStats(s)
-        setError(null)
-      } catch (e: any) {
-        console.error('Failed to load dashboard stats', e)
-        setError(e?.message || 'Failed to load stats')
-      } finally {
-        setLoading(false)
+        const avail = (s.available_years || []).map((v:number)=>({ id: v, name: String(v) }))
+        if (avail.length) setYearsOptions(avail)
+        // default select max year
+        const defaultYear = s.available_years && s.available_years.length ? Math.max(...s.available_years) : new Date().getFullYear()
+        setYears([defaultYear])
+        // Load commodities list
+        const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const res = await fetch(`${base}/api/commodities/?page_size=1000`, { credentials: 'include' })
+        if (res.ok) {
+          const json = await res.json()
+          const list = Array.isArray(json) ? json : (json?.results ?? [])
+          setCommodities(list.map((c:any)=>({ id: c.id, name: c.commodity_name_short || c.commodity_name_full })))
+        }
+        // Now load filtered stats
+        await loadStats([defaultYear], [])
+      } catch (e) {
+        console.error(e)
       }
     }
-    load()
+    init()
   }, [])
 
   const fmtCurrency = (val: number | string) => {
@@ -127,13 +161,42 @@ export default function DashboardPage() {
     } catch { return iso }
   }
 
+  // Build chart data for stacked bars and per-commodity lines
+  const chartData = React.useMemo(() => {
+    const vol = (stats as any)?.monthly_volume_breakdown || []
+    const avg = (stats as any)?.monthly_avg_price_breakdown || []
+    const map = new Map<string, any>()
+    vol.forEach((m: any) => {
+      const key = monthLabel(m.month)
+      const d = map.get(key) || { month: key };
+      (m.breakdown || []).forEach((b: any) => { d[b.commodity] = parseFloat(b.volume || 0) })
+      map.set(key, d)
+    })
+    avg.forEach((m: any) => {
+      const key = monthLabel(m.month)
+      const d = map.get(key) || { month: key };
+      (m.breakdown || []).forEach((b: any) => { d[`avg_${b.commodity}`] = parseFloat(b.avg_price || 0) })
+      map.set(key, d)
+    })
+    return Array.from(map.values())
+  }, [stats])
+
   const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6']
 
+  const colorMap = React.useMemo(() => {
+    const map: Record<string, string> = {}
+    ;(stats?.commodities || []).forEach((name: string, idx: number) => {
+      map[name] = colors[idx % colors.length]
+    })
+    return map
+  }, [stats])
+
   if (loading) {
-    return <LoadingSkeleton />
+    return <UiGuard token="ui:dashboard"><LoadingSkeleton /></UiGuard>
   }
 
   return (
+    <UiGuard token="ui:dashboard">
     <div className="space-y-8 p-6">
       <div className="flex items-center justify-between">
         <div>
@@ -144,11 +207,29 @@ export default function DashboardPage() {
             Welcome to your CRM overview
           </p>
         </div>
-        <div className="flex items-center space-x-2 bg-card border rounded-lg px-3 py-2 shadow-sm">
-          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-sm text-muted-foreground">
-            Last updated: {new Date().toLocaleTimeString('en-US', { timeZone: 'UTC' })}
-          </span>
+        <div className="flex items-start gap-4">
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Years</div>
+            <div className="w-44">
+              <MultiSelectList options={yearsOptions} selected={years} onChange={(next)=>{
+                setYears(next)
+                const yrs = next.map(v=>Number(v)).filter(Boolean)
+                const ids = selCommodityIds.map(v=>Number(v)).filter(Boolean)
+                loadStats(yrs as number[], ids as number[])
+              }} height={120} />
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">Commodities</div>
+            <div className="w-64">
+              <MultiSelectList options={commodities} selected={selCommodityIds} onChange={(next)=>{
+                setSelCommodityIds(next)
+                const yrs = years.map(v=>Number(v)).filter(Boolean)
+                const ids = next.map(v=>Number(v)).filter(Boolean)
+                loadStats(yrs as number[], ids as number[])
+              }} height={120} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -180,22 +261,58 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 shadow-sm">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold">Monthly Contract Values</CardTitle>
-            <p className="text-sm text-muted-foreground">Contract values over the last 12 months</p>
+            <CardTitle className="text-lg font-semibold">Monthly Volume & Weighted Avg Price</CardTitle>
+            <p className="text-sm text-muted-foreground">Volume (bars, left) and weighted average price (line, right)</p>
           </CardHeader>
           <CardContent>
             <div className="h-80">
-              {stats && stats.monthly_contract_values && stats.monthly_contract_values.length > 0 ? (
+              {chartData && chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ReBarChart data={stats.monthly_contract_values.map((m: any) => ({
-                    month: monthLabel(m.month),
-                    total: parseFloat(m.total_value || 0),
-                  }))}>
+                  <ComposedChart data={chartData}>
                     <XAxis dataKey="month" />
-                    <YAxis tickFormatter={(v) => `${Math.round(v/1000)}k`} />
-                    <Tooltip formatter={(v:any)=>fmtCurrency(v)} />
-                    <Bar dataKey="total" fill="#3b82f6" radius={[4,4,0,0]} />
-                  </ReBarChart>
+                    <YAxis yAxisId="left" tickFormatter={(v) => `${Math.round(v)}`} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={(v)=>fmtCurrency(v)} />
+                    <Tooltip content={({ active, payload, label }: any) => {
+                      if (!active || !payload || !payload.length) return null
+                      // Build per-commodity lines combining volume and avg price
+                      const commoditiesList: string[] = stats?.commodities || []
+                      const rows: { name: string; vol?: number; avg?: number }[] = []
+                      commoditiesList.forEach((name) => {
+                        const volEntry = payload.find((p: any) => p.dataKey === name)
+                        const avgEntry = payload.find((p: any) => p.dataKey === `avg_${name}`)
+                        const v = volEntry ? Number(volEntry.value || 0) : undefined
+                        const a = avgEntry ? Number(avgEntry.value || 0) : undefined
+                        if (v !== undefined || a !== undefined) rows.push({ name, vol: v, avg: a })
+                      })
+                      if (!rows.length) return null
+                      return (
+                        <div className="rounded-md bg-black/80 text-white text-xs px-3 py-2 shadow-lg">
+                          <div className="font-semibold mb-1">{label}</div>
+                          <div className="space-y-1">
+                            {rows.map((r) => {
+                              const c = colorMap[r.name] || '#999'
+                              const volStr = r.vol !== undefined ? `${Math.round(r.vol)}mt` : '—'
+                              const avgStr = r.avg !== undefined ? Number(r.avg).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'
+                              return (
+                                <div key={r.name} className="flex items-center gap-2">
+                                  <span className="inline-block w-2 h-2 rounded-full" style={{ background: c }} />
+                                  <span>{`${r.name}: ${volStr} @ ${avgStr}`}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    }} />
+                    {/* Stacked bars for each commodity */}
+                    {(stats?.commodities || []).map((name: string) => (
+                      <Bar key={`bar-${name}`} yAxisId="left" dataKey={name} stackId="vol" fill={colorMap[name]} />
+                    ))}
+                    {/* Lines for avg price per commodity */}
+                    {(stats?.commodities || []).map((name: string) => (
+                      <Line key={`line-${name}`} yAxisId="right" type="monotone" dataKey={`avg_${name}`} stroke={colorMap[name]} strokeWidth={2} dot={false} />
+                    ))}
+                  </ComposedChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No data</div>
@@ -206,23 +323,37 @@ export default function DashboardPage() {
 
         <Card className="col-span-3 shadow-sm">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold">Contract Status Distribution</CardTitle>
-            <p className="text-sm text-muted-foreground">Breakdown of contract statuses</p>
+            <CardTitle className="text-lg font-semibold">Commodity Share</CardTitle>
+            <p className="text-sm text-muted-foreground">Share of commodities (by volume)</p>
           </CardHeader>
           <CardContent>
             <div className="h-80">
-              {stats && stats.contract_status_distribution && stats.contract_status_distribution.length > 0 ? (
+              {stats && stats.commodity_share && stats.commodity_share.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <RePieChart>
-                    <Pie data={stats.contract_status_distribution}
-                         dataKey="count"
-                         nameKey="status"
+                    <Pie data={stats.commodity_share}
+                         dataKey="share"
+                         nameKey="commodity"
                          cx="50%" cy="50%" outerRadius={120}>
-                      {stats.contract_status_distribution.map((_: any, idx: number) => (
-                        <Cell key={idx} fill={colors[idx % colors.length]} />
+                      {stats.commodity_share.map((item: any, idx: number) => (
+                        <Cell key={idx} fill={colorMap[item.commodity] || colors[idx % colors.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip content={({ active, payload }: any) => {
+                      if (!active || !payload || !payload.length) return null
+                      const p = payload[0]?.payload || {}
+                      const color = colorMap[p.commodity] || '#999'
+                      return (
+                        <div className="rounded-md bg-black/80 text-white text-xs px-3 py-2 shadow-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="inline-block w-2 h-2 rounded-full" style={{ background: color }} />
+                            <span>{p.commodity}</span>
+                          </div>
+                          <div>volume: {Math.round(Number(p.volume || 0))}mt</div>
+                          <div>share: {Number(p.share || 0).toFixed(1)}%</div>
+                        </div>
+                      )
+                    }} />
                   </RePieChart>
                 </ResponsiveContainer>
               ) : (
@@ -278,5 +409,6 @@ export default function DashboardPage() {
         </Card>
       </div>
     </div>
+    </UiGuard>
   )
 }

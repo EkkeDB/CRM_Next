@@ -442,10 +442,15 @@ class DashboardStatsSerializer(serializers.Serializer):
     total_value = serializers.DecimalField(max_digits=20, decimal_places=2)
     active_contracts = serializers.IntegerField()
     pending_contracts = serializers.IntegerField()
-    top_counterparties = serializers.ListField()
-    top_commodities = serializers.ListField()
-    monthly_contract_values = serializers.ListField()
-    contract_status_distribution = serializers.ListField()
+    available_years = serializers.ListField(required=False, child=serializers.IntegerField())
+    top_counterparties = serializers.ListField(required=False)
+    top_commodities = serializers.ListField(required=False)
+    monthly_contract_values = serializers.ListField(required=False)
+    contract_status_distribution = serializers.ListField(required=False)
+    commodity_share = serializers.ListField(required=False)
+    commodities = serializers.ListField(required=False, child=serializers.CharField())
+    monthly_volume_breakdown = serializers.ListField(required=False)
+    monthly_avg_price_breakdown = serializers.ListField(required=False)
 
 
 class TradeSettingSerializer(serializers.ModelSerializer):

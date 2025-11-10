@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Edit, Eye, Trash2, Building, Users, MapPin, Mail, Phone, Download, Upload, Copy, X } from 'lucide-react'
 import { counterpartiesApi } from '@/lib/api-client'
+import UiGuard from '@/components/security/UiGuard'
 import { useToast } from '@/hooks/use-toast'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import type { Counterparty } from '@/types'
@@ -358,6 +359,7 @@ export default function CounterpartiesPage() {
   })
 
   return (
+    <UiGuard token="ui:counterparties">
     <div className="container mx-auto py-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
@@ -731,5 +733,6 @@ export default function CounterpartiesPage() {
         onCancel={() => setCounterpartyToDelete(null)}
       />
     </div>
+    </UiGuard>
   )
 }

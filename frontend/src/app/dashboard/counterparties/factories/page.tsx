@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import UiGuard from '@/components/security/UiGuard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -337,6 +338,7 @@ export default function FactoriesPage() {
   }
 
   return (
+    <UiGuard token="ui:factories">
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-2">
@@ -618,5 +620,6 @@ export default function FactoriesPage() {
         </CardContent>
       </Card>
     </div>
+    </UiGuard>
   )
 }

@@ -1,0 +1,153 @@
+*** Begin Patch
+*** Update File: frontend/src/app/dashboard/admin/users/page.tsx
+@@
+-import React, { useEffect, useMemo, useState } from 'react'
+-import { Info } from 'lucide-react'
++import React, { useEffect, useMemo, useState } from 'react'
++import { Info } from 'lucide-react'
+@@
+-  const [simulation, setSimulation] = useState<any | null>(null)
+-  // Structured constraints inputs
+-  const [centers, setCenters] = useState<{id:number; name:string}[]>([])
+-  const [commodities, setCommodities] = useState<{id:number; name:string}[]>([])
+-  const [selCenters, setSelCenters] = useState<number[]>([])
+-  const [selCommodities, setSelCommodities] = useState<(number|string)[]>([])
++  // Structured constraints inputs
++  const [centers, setCenters] = useState<{id:number; name:string}[]>([])
++  const [commodities, setCommodities] = useState<{id:number; name:string}[]>([])
++  const [commodityGroups, setCommodityGroups] = useState<{id:number; name:string}[]>([])
++  const [commodityTypes, setCommodityTypes] = useState<{id:number; name:string}[]>([])
++  const [commoditySubtypes, setCommoditySubtypes] = useState<{id:number; name:string}[]>([])
++  const [sociedades, setSociedades] = useState<{id:number; name:string}[]>([])
++  const [traders, setTraders] = useState<{id:number; name:string}[]>([])
++  const [selCenters, setSelCenters] = useState<number[]>([])
++  const [selCommodities, setSelCommodities] = useState<(number|string)[]>([])
++  const [selGroups, setSelGroups] = useState<number[]>([])
++  const [selTypes, setSelTypes] = useState<number[]>([])
++  const [selSubtypes, setSelSubtypes] = useState<number[]>([])
++  const [selSociedades, setSelSociedades] = useState<number[]>([])
++  const [selTraders, setSelTraders] = useState<number[]>([])
+@@
+-      // load centers and commodities for structured constraints
++      // load reference data for structured constraints
+       const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+-      const [cc, cm, cf] = await Promise.all([
++      const [cc, cm, cg, ct, cst, so, tr, cf] = await Promise.all([
+         fetch(`${base}/api/cost-centers/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
+         fetch(`${base}/api/commodities/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
++        fetch(`${base}/api/commodity-groups/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
++        fetch(`${base}/api/commodity-types/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
++        fetch(`${base}/api/commodity-subtypes/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
++        fetch(`${base}/api/sociedades/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
++        fetch(`${base}/api/traders/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
+         fetch(`${base}/api/contracts/field_catalog/`, { credentials: 'include' }).then(r=>r.json()).catch(()=>({fields:[]})),
+       ])
+       const ccList = Array.isArray(cc) ? cc : (cc?.results ?? [])
+       const cmList = Array.isArray(cm) ? cm : (cm?.results ?? [])
++      const cgList = Array.isArray(cg) ? cg : (cg?.results ?? [])
++      const ctList = Array.isArray(ct) ? ct : (ct?.results ?? [])
++      const cstList = Array.isArray(cst) ? cst : (cst?.results ?? [])
++      const soList = Array.isArray(so) ? so : (so?.results ?? [])
++      const trList = Array.isArray(tr) ? tr : (tr?.results ?? [])
+       setCenters(ccList.map((x:any)=>({id:x.id, name:x.cost_center_name})))
+       setCommodities(cmList.map((x:any)=>({id:x.id, name:x.commodity_name_short || x.commodity_name_full})))
++      setCommodityGroups(cgList.map((x:any)=>({id:x.id, name:x.commodity_group_name})))
++      setCommodityTypes(ctList.map((x:any)=>({id:x.id, name:x.commodity_type_name})))
++      setCommoditySubtypes(cstList.map((x:any)=>({id:x.id, name:x.commodity_subtype_name})))
++      setSociedades(soList.map((x:any)=>({id:x.id, name:x.sociedad_name})))
++      setTraders(trList.map((x:any)=>({id:x.id, name:x.trader_name})))
+       if (cf && Array.isArray(cf.fields)) {
+         setContractFieldsHint(cf.fields.join(', '))
+       }
+@@
+-  const handleAddAssignment = async () => {
++  const handleAddAssignment = async () => {
+     if (!selectedUser || !newAssignment.role) return
+     let constraints: any = {}
+     // Prefer structured inputs if any are provided; otherwise parse JSON textarea
+-    const hasStructured = selCenters.length || selCommodities.length || dateFrom || dateTo || monthsBack || maxExportRows || visibleFields
++    const hasStructured = selCenters.length || selCommodities.length || selGroups.length || selTypes.length || selSubtypes.length || selSociedades.length || selTraders.length || dateFrom || dateTo || monthsBack || maxExportRows || visibleFields
+     if (hasStructured) {
+       if (selCenters.length) constraints.centers = selCenters
+       if (selCommodities.length) constraints.commodities = selCommodities
++      if (selGroups.length) constraints.commodity_groups = selGroups
++      if (selTypes.length) constraints.commodity_types = selTypes
++      if (selSubtypes.length) constraints.commodity_subtypes = selSubtypes
++      if (selSociedades.length) constraints.sociedades = selSociedades
++      if (selTraders.length) constraints.traders = selTraders
+       if (monthsBack) {
+         constraints.date_window = { months_back: Number(monthsBack) }
+       } else if (dateFrom || dateTo) {
+         constraints.date_window = { ...(dateFrom?{from:dateFrom}:{}) , ...(dateTo?{to:dateTo}:{}) }
+       }
+       if (maxExportRows) constraints.max_export_rows = Number(maxExportRows)
+       if (visibleFields) constraints.visible_fields = visibleFields.split(',').map(s=>s.trim()).filter(Boolean)
+     } else {
+@@
+-      setSelCenters([]); setSelCommodities([]); setDateFrom(''); setDateTo(''); setMonthsBack(''); setMaxExportRows(''); setVisibleFields('')
++      setSelCenters([]); setSelCommodities([]); setSelGroups([]); setSelTypes([]); setSelSubtypes([]); setSelSociedades([]); setSelTraders([]); setDateFrom(''); setDateTo(''); setMonthsBack(''); setMaxExportRows(''); setVisibleFields('')
+       setError(null)
+     } catch (e: any) {
+       setError(e?.message || 'Failed to create assignment')
+     }
+   }
+@@
+-          <div className="col-span-1 space-y-4">
+-            <h2 className="font-medium">Simulation</h2>
+-            <button className="bg-gray-800 text-white px-3 py-1 rounded" onClick={handleSimulate}>Simulate Policy</button>
+-            <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto min-h-[200px]">{simulation ? JSON.stringify(simulation, null, 2) : 'No simulation yet'}</pre>
+-          </div>
++          <div className="col-span-1 space-y-4">
++            <h2 className="font-medium">Active Assignments</h2>
++            <div className="space-y-2">
++              {userAssignments.map(a => (
++                <div key={`summary-${a.id}`} className="p-2 bg-gray-50 border rounded">
++                  <div className="font-medium">{a.role_name || roles.find(r=>r.id===a.role)?.name}</div>
++                  {renderConstraintsPretty(a.constraints, { centers, commodities, commodityGroups, commodityTypes, commoditySubtypes, sociedades, traders })}
++                </div>
++              ))}
++            </div>
++          </div>
+         </div>
+       )}
+     </div>
+   )
+ }
++
++function renderConstraintsPretty(raw: any, refs: any) {
++  try {
++    const c = raw || {}
++    const mapVals = (vals: any[], lookup: {id:number; name:string}[]) => {
++      const map = new Map(lookup.map(x=>[String(x.id), x.name]))
++      return (vals||[]).map(v => map.get(String(v)) || String(v))
++    }
++    const sections: { label: string; values: (string|number)[] | undefined }[] = [
++      { label: 'Centers', values: c.centers ? mapVals(c.centers, refs.centers) : c.centers_names },
++      { label: 'Commodity Groups', values: c.commodity_groups ? mapVals(c.commodity_groups, refs.commodityGroups) : c.commodity_groups_names },
++      { label: 'Commodity Types', values: c.commodity_types ? mapVals(c.commodity_types, refs.commodityTypes) : c.commodity_types_names },
++      { label: 'Commodity Subtypes', values: c.commodity_subtypes ? mapVals(c.commodity_subtypes, refs.commoditySubtypes) : c.commodity_subtypes_names },
++      { label: 'Commodities', values: c.commodities ? mapVals(c.commodities, refs.commodities) : c.commodities_names },
++      { label: 'Sociedades', values: c.sociedades ? mapVals(c.sociedades, refs.sociedades) : c.sociedades_names },
++      { label: 'Traders', values: c.traders ? mapVals(c.traders, refs.traders) : c.traders_names },
++    ]
++    return (
++      <div className="mt-2 space-y-1 text-xs text-gray-700">
++        {sections.filter(s=>s.values && s.values.length).map(s => (
++          <div key={s.label}><span className="font-semibold">{s.label}:</span> {(s.values as any).join(', ')}</div>
++        ))}
++        {c.date_window ? (
++          <div><span className="font-semibold">Date window:</span> {c.date_window.months_back ? `last ${c.date_window.months_back} months` : `${c.date_window.from || ''} - ${c.date_window.to || ''}`}</div>
++        ) : null}
++        {'max_export_rows' in (c||{}) ? (
++          <div><span className="font-semibold">Max export rows:</span> {c.max_export_rows ?? 'unlimited'}</div>
++        ) : null}
++        {c.visible_fields ? (
++          <div><span className="font-semibold">Visible fields:</span> {Array.isArray(c.visible_fields) ? c.visible_fields.join(', ') : c.visible_fields}</div>
++        ) : null}
++      </div>
++    )
++  } catch {
++    return <pre className="text-xs bg-gray-50 p-2 rounded mt-2 overflow-auto">{JSON.stringify(raw, null, 2)}</pre>
++  }
++}
+*** End Patch

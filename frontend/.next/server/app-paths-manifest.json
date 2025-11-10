@@ -1,11 +1,7 @@
 {
-  "/dashboard/counterparties/page": "app/dashboard/counterparties/page.js",
-  "/dashboard/counterparties/factories/page": "app/dashboard/counterparties/factories/page.js",
+  "/page": "app/page.js",
+  "/auth/login/page": "app/auth/login/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/customers/[id]/page": "app/dashboard/customers/[id]/page.js",
-  "/dashboard/currencies/page": "app/dashboard/currencies/page.js",
-  "/dashboard/contracts/page": "app/dashboard/contracts/page.js",
-  "/dashboard/reports/page": "app/dashboard/reports/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js",
-  "/dashboard/admin/users/page": "app/dashboard/admin/users/page.js"
+  "/dashboard/admin/users/page": "app/dashboard/admin/users/page.js",
+  "/dashboard/admin/roles/page": "app/dashboard/admin/roles/page.js"
 }
