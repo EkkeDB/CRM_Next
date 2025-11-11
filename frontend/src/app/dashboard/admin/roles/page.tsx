@@ -68,7 +68,8 @@ export default function RolesMatrixPage() {
     setSaving(true)
     setError(null)
     try {
-      const updated = await rolesApi.update(selectedRole.id, { permissions: Array.from(permSet) })
+      const cleaned = Array.from(permSet).filter(t => !t.startsWith('ui:'))
+      const updated = await rolesApi.update(selectedRole.id, { permissions: cleaned })
       setRoles(prev => prev.map(r => (r.id === updated.id ? updated : r)))
     } catch (e: any) {
       setError(e?.message || 'Failed to save role')
@@ -172,3 +173,4 @@ export default function RolesMatrixPage() {
     </UiGuard>
   )
 }
+

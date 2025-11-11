@@ -759,6 +759,14 @@ export const facilityConsumptionsApi = {
     return response.data.results || response.data
   },
 
+  getHeatmap: async (params?: { commodities?: number[]; countries?: string[] }): Promise<Array<{ country_code: string | null; country: string | null; region: string | null; province: string | null; lat: number; lng: number; volume: number }>> => {
+    const q: any = {}
+    if (params?.commodities && params.commodities.length) q.commodities = params.commodities.join(',')
+    if (params?.countries && params.countries.length) q.countries = params.countries.join(',')
+    const response = await apiClient.get('/facility-consumptions/geo_heatmap/', { params: q })
+    return response.data
+  },
+
   create: async (data: Omit<FacilityConsumption, 'id' | 'commodity_name' | 'yearly_volume'>): Promise<FacilityConsumption> => {
     const response = await apiClient.post('/facility-consumptions/', data)
     return response.data
@@ -776,7 +784,7 @@ export const facilityConsumptionsApi = {
 
 // Utilities API
 export const utilsApi = {
-  geocode: async (query: string): Promise<{ lat: number; lng: number; provider: string; region?: string | null; province?: string | null; country_code?: string | null }> => {
+  geocode: async (query: string): Promise<{ lat: number; lng: number; provider: string; region?: string | null; province?: string | null; country_code?: string | null; precision?: string; message?: string }> => {
     const response = await apiClient.get('/geocode/', { params: { q: query } })
     return response.data
   },
@@ -1104,3 +1112,4 @@ export default apiClient
 
 // Export utility functions  
 export { clearAuthState, clearCSRFTokenCache, getCSRFToken, hasNonHttpOnlyAuthCookies, waitForAuthentication }
+

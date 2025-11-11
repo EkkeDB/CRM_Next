@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import UiGuard from '@/components/security/UiGuard'
-import { Info } from 'lucide-react'
 import MultiSelectList from '@/components/ui/multi-select-list'
 import { authzApi, rolesApi, roleAssignmentsApi } from '@/lib/api-client'
 import type { User, Role, UserRoleAssignment } from '@/types'
@@ -24,7 +23,7 @@ export default function AdminUsersPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [assignments, setAssignments] = useState<UserRoleAssignment[]>([])
   const [selectedUser, setSelectedUser] = useState<number | null>(null)
-  const [newAssignment, setNewAssignment] = useState<{ role: number | ''; constraints: string }>({ role: '', constraints: '{"centers":[],"commodities":[],"date_window":null}' })
+  const [newAssignment, setNewAssignment] = useState<{ role: number | '' }>({ role: '' })
   // Structured constraints inputs
   const [centers, setCenters] = useState<{id:number; name:string}[]>([])
   const [commodities, setCommodities] = useState<{id:number; name:string}[]>([])
@@ -44,8 +43,6 @@ export default function AdminUsersPage() {
   const [dateTo, setDateTo] = useState<string>("")
   const [monthsBack, setMonthsBack] = useState<string>("")
   const [maxExportRows, setMaxExportRows] = useState<string>("")
-  const [visibleFields, setVisibleFields] = useState<string>("")
-  const [contractFieldsHint, setContractFieldsHint] = useState<string>("")
   const [uiPages, setUiPages] = useState<{key:string; label:string; token:string}[]>([])
   const [selUiPages, setSelUiPages] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +58,7 @@ export default function AdminUsersPage() {
       if (u.length) setSelectedUser(u[0].id)
       // load reference data for structured constraints
       const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const [cc, cm, cg, ct, cst, so, tr, cf, catalog] = await Promise.all([
+      const [cc, cm, cg, ct, cst, so, tr, catalog] = await Promise.all([
         fetch(`${base}/api/cost-centers/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
         fetch(`${base}/api/commodities/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
         fetch(`${base}/api/commodity-groups/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
@@ -69,7 +66,6 @@ export default function AdminUsersPage() {
         fetch(`${base}/api/commodity-subtypes/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
         fetch(`${base}/api/sociedades/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
         fetch(`${base}/api/traders/?page_size=1000`, { credentials: 'include' }).then(r=>r.json()),
-        fetch(`${base}/api/contracts/field_catalog/`, { credentials: 'include' }).then(r=>r.json()).catch(()=>({fields:[]})),
         fetch(`${base}/api/auth/authz/catalog/`, { credentials: 'include' }).then(r=>r.json()).catch(()=>({ ui_pages: [] })),
       ])
       const ccList = Array.isArray(cc) ? cc : (cc?.results ?? [])
@@ -86,9 +82,7 @@ export default function AdminUsersPage() {
       setCommoditySubtypes(cstList.map((x:any)=>({id:x.id, name:x.commodity_subtype_name})))
       setSociedades(soList.map((x:any)=>({id:x.id, name:x.sociedad_name})))
       setTraders(trList.map((x:any)=>({id:x.id, name:x.trader_name})))
-      if (cf && Array.isArray(cf.fields)) {
-        setContractFieldsHint(cf.fields.join(', '))
-      }
+      
       // UI pages
       const uiList = (catalog?.ui_pages || []) as any[]
       setUiPages(uiList)
@@ -110,6 +104,17 @@ export default function AdminUsersPage() {
     load()
   }, [])
 
+  // Update UI pages selection when switching users or assignments change
+  useEffect(() => {
+    if (!selectedUser) return
+    const uiSelected = new Set<string>()
+    ;(assignments || []).filter((x:any)=>x.user=== selectedUser).forEach((as:any) => {
+      const pages = (as.constraints || {}).ui_pages
+      if (Array.isArray(pages)) pages.forEach((p:string)=> uiSelected.add(p))
+    })
+    setSelUiPages(Array.from(uiSelected))
+  }, [selectedUser, assignments])
+
   const userAssignments = useMemo(() => {
     const list = Array.isArray(assignments) ? assignments : []
     return list.filter(a => a.user === selectedUser)
@@ -118,36 +123,25 @@ export default function AdminUsersPage() {
   const handleAddAssignment = async () => {
     if (!selectedUser || !newAssignment.role) return
     let constraints: any = {}
-    // Prefer structured inputs if any are provided; otherwise parse JSON textarea
-    const hasStructured = selCenters.length || selCommodities.length || selGroups.length || selTypes.length || selSubtypes.length || selSociedades.length || selTraders.length || dateFrom || dateTo || monthsBack || maxExportRows || visibleFields
-    if (hasStructured) {
-      if (selCenters.length) constraints.centers = selCenters
-      if (selCommodities.length) constraints.commodities = selCommodities
-      if (selGroups.length) constraints.commodity_groups = selGroups
-      if (selTypes.length) constraints.commodity_types = selTypes
-      if (selSubtypes.length) constraints.commodity_subtypes = selSubtypes
-      if (selSociedades.length) constraints.sociedades = selSociedades
-      if (selTraders.length) constraints.traders = selTraders
-      if (monthsBack) {
-        constraints.date_window = { months_back: Number(monthsBack) }
-      } else if (dateFrom || dateTo) {
-        constraints.date_window = { ...(dateFrom?{from:dateFrom}:{}) , ...(dateTo?{to:dateTo}:{}) }
-      }
-      if (maxExportRows) constraints.max_export_rows = Number(maxExportRows)
-      if (visibleFields) constraints.visible_fields = visibleFields.split(',').map(s=>s.trim()).filter(Boolean)
-    } else {
-      try {
-        constraints = newAssignment.constraints ? JSON.parse(newAssignment.constraints) : {}
-      } catch (e) {
-        setError('Constraints must be valid JSON')
-        return
-      }
+    // Build constraints from structured inputs
+    if (selCenters.length) constraints.centers = selCenters
+    if (selCommodities.length) constraints.commodities = selCommodities
+    if (selGroups.length) constraints.commodity_groups = selGroups
+    if (selTypes.length) constraints.commodity_types = selTypes
+    if (selSubtypes.length) constraints.commodity_subtypes = selSubtypes
+    if (selSociedades.length) constraints.sociedades = selSociedades
+    if (selTraders.length) constraints.traders = selTraders
+    if (monthsBack) {
+      constraints.date_window = { months_back: Number(monthsBack) }
+    } else if (dateFrom || dateTo) {
+      constraints.date_window = { ...(dateFrom?{from:dateFrom}:{}) , ...(dateTo?{to:dateTo}:{}) }
     }
+    if (maxExportRows) constraints.max_export_rows = Number(maxExportRows)
     try {
       const created = await roleAssignmentsApi.create({ user: selectedUser, role: Number(newAssignment.role), constraints, is_active: true })
       setAssignments(prev => [...prev, created])
-      setNewAssignment({ role: '', constraints: '{"centers":[],"commodities":[],"date_window":null}' })
-      setSelCenters([]); setSelCommodities([]); setSelGroups([]); setSelTypes([]); setSelSubtypes([]); setSelSociedades([]); setSelTraders([]); setDateFrom(''); setDateTo(''); setMonthsBack(''); setMaxExportRows(''); setVisibleFields('')
+      setNewAssignment({ role: '' })
+      setSelCenters([]); setSelCommodities([]); setSelGroups([]); setSelTypes([]); setSelSubtypes([]); setSelSociedades([]); setSelTraders([]); setDateFrom(''); setDateTo(''); setMonthsBack(''); setMaxExportRows('')
       setError(null)
     } catch (e: any) {
       setError(e?.message || 'Failed to create assignment')
@@ -321,26 +315,28 @@ export default function AdminUsersPage() {
                   <div className="text-xs text-gray-600">Max export rows</div>
                   <input type="number" min="0" className="border rounded p-1 w-full" value={maxExportRows} onChange={e=>setMaxExportRows(e.target.value)} placeholder="e.g., 5000" />
                 </div>
-                <div className="col-span-2">
-                  <div className="text-xs text-gray-600 flex items-center gap-1">
-                    <span>Visible fields (comma separated)</span>
-                    <span className="relative inline-flex items-center group">
-                      <Info className="h-4 w-4 text-gray-600" />
-                      <div className="absolute top-full left-0 mt-1 z-50 hidden group-hover:block bg-gray-900 text-white text-xs rounded px-2 py-1 shadow-lg max-w-[36rem] w-max whitespace-pre-wrap">
-                        {contractFieldsHint || 'Fields will appear after loading'}
-                      </div>
-                    </span>
-                  </div>
-                  <input type="text" className="border rounded p-1 w-full" value={visibleFields} onChange={e=>setVisibleFields(e.target.value)} placeholder="id,contract_number,status,price,quantity" />
-                </div>
+                {/* UI Pages handled in a separate panel below */}
               </div>
-              <div className="text-xs text-gray-500">Or paste raw JSON below (used only if structured inputs are empty)</div>
-              <textarea className="border rounded p-2 w-full h-24 font-mono text-xs" value={newAssignment.constraints} onChange={e=>setNewAssignment(v=>({...v, constraints: e.target.value}))} />
               <button className="bg-blue-600 text-white px-3 py-1 rounded" onClick={handleAddAssignment}>Assign</button>
             </div>
           </div>
           <div className="col-span-1 space-y-4">
             <h2 className="font-medium">Active Assignments</h2>
+            <div className="p-2 bg-gray-50 border rounded text-xs">
+              <div className="font-medium mb-1">Pages allowed</div>
+              <div>
+                {(() => {
+                  const labelByKey = Object.fromEntries(uiPages.map(p=>[p.key, p.label])) as Record<string,string>
+                  const selected = new Set<string>()
+                  userAssignments.forEach((a:any) => {
+                    const pages = (a.constraints || {}).ui_pages
+                    if (Array.isArray(pages)) pages.forEach((k:string) => selected.add(k))
+                  })
+                  const labels = Array.from(selected).map(k => labelByKey[k] || k)
+                  return labels.length ? labels.join(', ') : 'None'
+                })()}
+              </div>
+            </div>
             <div className="space-y-2">
               {userAssignments.map(a => (
                 <div key={`summary-${a.id}`} className="p-2 bg-gray-50 border rounded">
@@ -348,48 +344,30 @@ export default function AdminUsersPage() {
                     <div className="font-medium">{a.role_name || roles.find(r=>r.id===a.role)?.name}</div>
                     <button className="text-red-600 text-sm" onClick={() => handleDeleteAssignment(a.id)}>Remove</button>
                   </div>
-                  {renderConstraintsPretty(a.constraints, { centers, commodities, commodityGroups, commodityTypes, commoditySubtypes, sociedades, traders })}
+                  {renderConstraintsPretty(a.constraints, { centers, commodities, commodityGroups, commodityTypes, commoditySubtypes, sociedades, traders, uiPages })}
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* UI Pages Access per user */}
+        {/* Separate UI Pages Access panel */}
         <div className="mt-6 border rounded p-3">
           <div className="flex items-center justify-between mb-2">
             <div className="font-medium">UI Pages Access</div>
             <div className="flex items-center gap-2">
-              <button
-                className="px-2 py-1 text-xs border rounded"
-                onClick={() => setSelUiPages(uiPages.map(p => p.key))}
-                disabled={!uiPages.length}
-                title="Select all pages"
-              >Select all</button>
-              <button
-                className="px-2 py-1 text-xs border rounded"
-                onClick={() => setSelUiPages([])}
-                disabled={!selUiPages.length}
-                title="Clear selection"
-              >Clear all</button>
-              <button className="bg-blue-600 text-white px-3 py-1 rounded" onClick={saveUiPages}>Save</button>
+              <button className="px-2 py-1 text-xs border rounded" onClick={() => setSelUiPages(uiPages.map(p => p.key))} disabled={!uiPages.length}>Select all</button>
+              <button className="px-2 py-1 text-xs border rounded" onClick={() => setSelUiPages([])} disabled={!selUiPages.length}>Clear all</button>
+              <button className="bg-indigo-600 text-white px-3 py-1 rounded" onClick={saveUiPages}>Grant access</button>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-            {uiPages.map(p => (
-              <label key={p.key} className="inline-flex items-center gap-2">
-                <input type="checkbox" checked={selUiPages.includes(p.key)} onChange={e=>{
-                  const checked = e.target.checked
-                  setSelUiPages(prev => {
-                    const s = new Set(prev)
-                    if (checked) s.add(p.key); else s.delete(p.key)
-                    return Array.from(s)
-                  })
-                }} />
-                <span>{p.label}</span>
-              </label>
-            ))}
-          </div>
+          <MultiSelectList
+            options={uiPages.map(p=>({ id: p.key, name: p.label }))}
+            selected={selUiPages}
+            onChange={(next)=> setSelUiPages(next.map(String))}
+            placeholder="Filter pages…"
+            height={200}
+          />
         </div>
         </>
       )}
@@ -405,15 +383,19 @@ function renderConstraintsPretty(raw: any, refs: any) {
       const map = new Map(lookup.map(x=>[String(x.id), x.name]))
       return (vals||[]).map(v => map.get(String(v)) || String(v))
     }
-    const sections: { label: string; values: (string|number)[] | undefined }[] = [
-      { label: 'Centers', values: c.centers ? mapVals(c.centers, refs.centers) : c.centers_names },
-      { label: 'Commodity Groups', values: c.commodity_groups ? mapVals(c.commodity_groups, refs.commodityGroups) : c.commodity_groups_names },
-      { label: 'Commodity Types', values: c.commodity_types ? mapVals(c.commodity_types, refs.commodityTypes) : c.commodity_types_names },
-      { label: 'Commodity Subtypes', values: c.commodity_subtypes ? mapVals(c.commodity_subtypes, refs.commoditySubtypes) : c.commodity_subtypes_names },
-      { label: 'Commodities', values: c.commodities ? mapVals(c.commodities, refs.commodities) : c.commodities_names },
-      { label: 'Sociedades', values: c.sociedades ? mapVals(c.sociedades, refs.sociedades) : c.sociedades_names },
-      { label: 'Traders', values: c.traders ? mapVals(c.traders, refs.traders) : c.traders_names },
-    ]
+  const sections: { label: string; values: (string|number)[] | undefined }[] = [
+    { label: 'Centers', values: c.centers ? mapVals(c.centers, refs.centers) : c.centers_names },
+    { label: 'Commodity Groups', values: c.commodity_groups ? mapVals(c.commodity_groups, refs.commodityGroups) : c.commodity_groups_names },
+    { label: 'Commodity Types', values: c.commodity_types ? mapVals(c.commodity_types, refs.commodityTypes) : c.commodity_types_names },
+    { label: 'Commodity Subtypes', values: c.commodity_subtypes ? mapVals(c.commodity_subtypes, refs.commoditySubtypes) : c.commodity_subtypes_names },
+    { label: 'Commodities', values: c.commodities ? mapVals(c.commodities, refs.commodities) : c.commodities_names },
+    { label: 'Sociedades', values: c.sociedades ? mapVals(c.sociedades, refs.sociedades) : c.sociedades_names },
+    { label: 'Traders', values: c.traders ? mapVals(c.traders, refs.traders) : c.traders_names },
+    { label: 'UI Pages', values: Array.isArray(c.ui_pages) ? (c.ui_pages as string[]).map((k:string)=>{
+      const f = (refs.uiPages || []).find((p:any)=>p.key===k)
+      return f ? f.label : k
+    }) : undefined },
+  ]
     return (
       <div className="mt-2 space-y-1 text-xs text-gray-700">
         {sections.filter(s=>s.values && s.values.length).map(s => (
@@ -425,9 +407,7 @@ function renderConstraintsPretty(raw: any, refs: any) {
         {'max_export_rows' in (c||{}) ? (
           <div><span className="font-semibold">Max export rows:</span> {c.max_export_rows ?? 'unlimited'}</div>
         ) : null}
-        {c.visible_fields ? (
-          <div><span className="font-semibold">Visible fields:</span> {Array.isArray(c.visible_fields) ? c.visible_fields.join(', ') : c.visible_fields}</div>
-        ) : null}
+        {/* visible_fields removed from UI */}
       </div>
     )
   } catch {

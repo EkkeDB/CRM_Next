@@ -79,6 +79,40 @@ export default function FactoriesPage() {
     is_active: true as any,
   })
 
+  // Temporary geocode debug panel state
+  const [geoOpen, setGeoOpen] = useState(false)
+  const [geoAddr, setGeoAddr] = useState('')
+  const [geoCity, setGeoCity] = useState('')
+  const [geoCountry, setGeoCountry] = useState('')
+  const [geoLoading, setGeoLoading] = useState(false)
+  const [geoResult, setGeoResult] = useState<any | null>(null)
+  const [geoError, setGeoError] = useState<string | null>(null)
+
+  const testGeocode = async () => {
+    setGeoLoading(true)
+    setGeoError(null)
+    setGeoResult(null)
+    try {
+      const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const q = [geoAddr, geoCity, geoCountry].filter(Boolean).join(', ')
+      const resp = await fetch(`${base}/api/geocode/?q=${encodeURIComponent(q)}&raw=1`, { credentials: 'include' })
+      const data = await resp.json()
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Failed')
+      }
+      console.debug('Geocode test result', data)
+      setGeoResult(data)
+      toast({ title: 'Geocode ok', description: `lat=${data.lat}, lng=${data.lng}, provider=${data.provider}` })
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to geocode'
+      setGeoError(msg)
+      console.error('Geocode test error', e)
+      toast({ title: 'Geocode error', description: msg, variant: 'destructive' })
+    } finally {
+      setGeoLoading(false)
+    }
+  }
+
   // Filters
   const [q, setQ] = useState('')
   const [filterRegion, setFilterRegion] = useState('')
@@ -459,12 +493,14 @@ export default function FactoriesPage() {
                         province: form.province || (res.province ?? ''),
                         region: form.region || (res.region ?? ''),
                       })
-                      const desc = [
+                      const descLines = [
                         `Provider: ${res.provider}`,
+                        `Lat/Lng: ${lat}, ${lng}`,
                         res.province ? `Province: ${res.province}` : null,
                         res.region ? `Region: ${res.region}` : null,
-                      ].filter(Boolean).join(' | ')
-                      toast({ title: 'Location found', description: desc })
+                        (res as any).message ? (res as any).message : null,
+                      ].filter(Boolean)
+                      toast({ title: 'Location found', description: descLines.join('\n') })
                     } catch (e: any) {
                       toast({ title: 'Geocode failed', description: e?.response?.data?.error || 'Unable to locate address', variant: 'destructive' })
                     }
@@ -546,6 +582,40 @@ export default function FactoriesPage() {
         </Dialog>
       </div>
 
+      {/* Temporary Geocode Debug Panel */}
+      <div className="mb-4">
+        <button className="text-xs underline text-blue-600" onClick={() => setGeoOpen(v => !v)}>
+          {geoOpen ? 'Hide geocode tester' : 'Show geocode tester'}
+        </button>
+        {geoOpen && (
+          <div className="mt-2 border rounded p-3 bg-gray-50">
+            <div className="text-xs text-gray-600 mb-2">
+              Backend rate limit: 30 req/min. Nominatim also enforces ~1 req/sec and User-Agent policy.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+              <input className="border rounded p-1" placeholder="Address (optional)" value={geoAddr} onChange={e=>setGeoAddr(e.target.value)} />
+              <input className="border rounded p-1" placeholder="City" value={geoCity} onChange={e=>setGeoCity(e.target.value)} />
+              <input className="border rounded p-1" placeholder="Country" value={geoCountry} onChange={e=>setGeoCountry(e.target.value)} />
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <button className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-60" disabled={geoLoading} onClick={testGeocode}>
+                {geoLoading ? 'Testing…' : 'Test geocode'}
+              </button>
+              {geoError && <span className="text-xs text-red-600">{geoError}</span>}
+            </div>
+            {geoResult && (
+              <div className="mt-2 text-xs">
+                <div><span className="font-semibold">lat/lng:</span> {geoResult.lat}, {geoResult.lng} ({geoResult.provider})</div>
+                <div><span className="font-semibold">country_code:</span> {geoResult.country_code || '—'}{' '}<span className="font-semibold">region:</span> {geoResult.region || '—'}{' '}<span className="font-semibold">province:</span> {geoResult.province || '—'}</div>
+                {geoResult.raw && (
+                  <pre className="mt-2 bg-white border rounded p-2 overflow-auto max-h-56">{JSON.stringify(geoResult.raw, null, 2)}</pre>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Factories List</CardTitle>
@@ -593,12 +663,18 @@ export default function FactoriesPage() {
                         <Edit className="h-4 w-4 mr-2" /> Edit
                       </Button>
                       <Button variant="outline" size="sm" onClick={async () => {
+                        const req = { address: (f as any).address, city: f.city, country: f.country }
                         try {
-                          const updated = await facilitiesApi.update(f.id, { address: (f as any).address, city: f.city, country: f.country })
+                          console.debug('Re-enrich request', req)
+                          const updated = await facilitiesApi.update(f.id, req)
+                          console.debug('Re-enrich response', updated)
                           setFacilities(facilities.map(x => x.id === f.id ? updated : x))
-                          toast({ title: 'Enriched', description: 'Admin areas refreshed from address' })
-                        } catch (e) {
-                          toast({ title: 'Re-enrich failed', description: 'Check address/city/country and try again', variant: 'destructive' })
+                          const dbg: any = { city: (updated as any)?.city, country: (updated as any)?.country, province: (updated as any)?.province, region: (updated as any)?.region, latitude: (updated as any)?.latitude, longitude: (updated as any)?.longitude }
+                          toast({ title: 'Enriched', description: `Req: ${req.address || ''}, ${req.city || ''}, ${req.country || ''}\nResp: ${JSON.stringify(dbg)}` })
+                        } catch (e: any) {
+                          const detail = e?.response?.data ? JSON.stringify(e.response.data).slice(0, 600) : (e?.message || 'Unknown error')
+                          console.error('Re-enrich error', e)
+                          toast({ title: 'Re-enrich failed', description: detail, variant: 'destructive' })
                         }
                       }}>
                         <RefreshCw className="h-4 w-4 mr-2" /> Re-enrich

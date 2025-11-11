@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import UiGuard from '@/components/security/UiGuard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
@@ -104,6 +104,7 @@ export default function DashboardPage() {
   const [yearsOptions, setYearsOptions] = useState<{id:number; name:string}[]>([])
   const [commodities, setCommodities] = useState<{id:number; name:string}[]>([])
   const [selCommodityIds, setSelCommodityIds] = useState<Array<number | string>>([])
+  // Heatmap moved to /dashboard/geo
 
   const loadStats = async (yrs: number[], commodityIds: number[]) => {
     setLoading(true)
@@ -140,12 +141,15 @@ export default function DashboardPage() {
         }
         // Now load filtered stats
         await loadStats([defaultYear], [])
+        // Geo heatmap moved to a dedicated page
       } catch (e) {
         console.error(e)
       }
     }
     init()
   }, [])
+
+  // Geo heatmap moved to a dedicated page
 
   const fmtCurrency = (val: number | string) => {
     const n = typeof val === 'string' ? parseFloat(val) : val
@@ -256,6 +260,8 @@ export default function DashboardPage() {
           icon={<Clock className="h-4 w-4 text-amber-600" />}
         />
       </div>
+
+      {/* Geo heatmap moved to /dashboard/geo */}
 
       {/* Charts */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
@@ -410,5 +416,117 @@ export default function DashboardPage() {
       </div>
     </div>
     </UiGuard>
+  )
+}
+
+function useLeafletAndHeat(): boolean {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const w = window as any
+    const ensureLeaflet = () => new Promise<void>((resolve) => {
+      if (w.L) return resolve()
+      const linkId = 'leaflet-css'
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link')
+        link.id = linkId
+        link.rel = 'stylesheet'
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+        document.head.appendChild(link)
+      }
+      const scriptId = 'leaflet-js'
+      if (document.getElementById(scriptId)) {
+        const check = () => { if (w.L) resolve() }
+        setTimeout(check, 50)
+      } else {
+        const script = document.createElement('script')
+        script.id = scriptId
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+        script.async = true
+        script.onload = () => resolve()
+        document.body.appendChild(script)
+      }
+    })
+    const ensureHeat = () => new Promise<void>((resolve) => {
+      if ((w as any).L && (w as any).L.heatLayer) return resolve()
+      const heatId = 'leaflet-heat-js'
+      if (document.getElementById(heatId)) {
+        const check = () => { if ((w as any).L && (w as any).L.heatLayer) resolve() }
+        setTimeout(check, 50)
+      } else {
+        const script = document.createElement('script')
+        script.id = heatId
+        script.src = 'https://unpkg.com/leaflet.heat/dist/leaflet-heat.js'
+        script.async = true
+        script.onload = () => resolve()
+        document.body.appendChild(script)
+      }
+    })
+    ;(async () => {
+      await ensureLeaflet()
+      await ensureHeat()
+      setReady(true)
+    })()
+  }, [])
+  return ready
+}
+
+function HeatmapView({ data, loading }: { data: Array<{ country_code: string | null; country: string | null; region: string | null; province: string | null; lat: number; lng: number; volume: number }>; loading: boolean }) {
+  const ready = useLeafletAndHeat()
+  const [map, setMap] = useState<any>(null)
+  const mapId = 'dashboard-heatmap'
+
+  // Init map
+  useEffect(() => {
+    if (!ready) return
+    if (map) return
+    const w = window as any
+    const L = w.L
+    const el = document.getElementById(mapId)
+    if (!el) return
+    const m = L.map(el).setView([40, -3], 5)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18,
+    }).addTo(m)
+    setMap(m)
+    return () => { try { m.remove() } catch {} }
+  }, [ready])
+
+  // Draw heatlayer and markers
+  useEffect(() => {
+    if (!map || !(window as any).L) return
+    const L = (window as any).L
+    // Clear non-base layers
+    map.eachLayer((layer: any) => {
+      if (layer instanceof L.TileLayer) return
+      map.removeLayer(layer)
+    })
+    if (!data || data.length === 0) return
+    const maxVol = Math.max(...data.map(d => d.volume || 0), 1)
+    const heatPoints = data.map(d => [d.lat, d.lng, Math.max(0.05, (d.volume || 0) / maxVol)])
+    const heat = (L as any).heatLayer(heatPoints, { radius: 25, blur: 18, maxZoom: 12 }).addTo(map)
+    // Add small markers for popups
+    const markers: any[] = []
+    data.forEach(d => {
+      const mk = L.circleMarker([d.lat, d.lng], { radius: 4, color: '#ef4444', weight: 1, fillOpacity: 0.8 }).addTo(map)
+      const title = d.country_code === 'pt'
+        ? `Region: ${d.region || '-'}\nVolume: ${Math.round(d.volume || 0)} mt`
+        : `Region: ${d.region || '-'}\nProvince: ${d.province || '-'}\nVolume: ${Math.round(d.volume || 0)} mt`
+      mk.bindPopup(`<pre style="margin:0; white-space:pre-wrap">${title}</pre>`)
+      markers.push(mk)
+    })
+    // Fit bounds
+    if (markers.length > 0) {
+      const group = L.featureGroup(markers)
+      map.fitBounds(group.getBounds().pad(0.2))
+    }
+  }, [map, data])
+
+  return (
+    <div className="w-full h-[420px] rounded border">
+      {loading && <div className="absolute z-[5] m-3 text-xs bg-black/60 text-white px-2 py-1 rounded">Loading heatmap…</div>}
+      <div id={mapId} className="w-full h-full" />
+    </div>
   )
 }

@@ -16,8 +16,8 @@ class GeocodingError(Exception):
 
 
 def _cache_key(query: str) -> str:
-    # Bump version when response shape changes to avoid stale caches
-    return f"geocode:v5:{query.strip().lower()}"
+    # Bump version when response mapping changes to avoid stale caches
+    return f"geocode:v7:{query.strip().lower()}"
 
 
 def _normalize_name(name: str) -> str:
@@ -50,7 +50,12 @@ def _province_from_single_province_region_es(region: str) -> str | None:
 
 
 def _extract_es_pt_fr_from_nominatim(address: dict) -> dict:
-    """Map Nominatim address payload to (country_code, region, province) for ES/PT/FR."""
+    """Map Nominatim address payload to (country_code, region, province) for ES/PT/FR.
+
+    For Portugal specifically, derive region as the District (Distrito) when possible,
+    avoiding municipalities like Ovar being used as region. Prefer the `district` or
+    `state_district` fields; otherwise, infer from ISO3166-2 codes or known district names.
+    """
     cc = (address.get('country_code') or '').lower()
     region = province = None
     if cc == 'es':
@@ -83,20 +88,74 @@ def _extract_es_pt_fr_from_nominatim(address: dict) -> dict:
         if not province and rnorm in ('melilla', 'ciudad autonoma de melilla', 'ciudad autónoma de melilla'):
             province = 'Melilla'
     elif cc == 'pt':
-        # Portugal: district ~ province; region sometimes in 'region' or 'state' or autonomous_region
+        # Portugal mapping (aligned to requested semantics):
+        #  - region: District (Distrito). Avoid using municipality/city as region.
+        #  - province: municipality/city/town/village (local area)
+        # Step 1: direct district fields
+        region = address.get('district') or address.get('state_district')
+
+        # Step 2: infer district from ISO3166-2 codes if needed
+        if not region:
+            code = (
+                address.get('ISO3166-2-lvl6')
+                or address.get('ISO3166-2-lvl5')
+                or address.get('ISO3166-2-lvl4')
+                or address.get('ISO3166-2-lvl3')
+            )
+            pt_iso = {
+                'PT-01': 'Aveiro',
+                'PT-02': 'Beja',
+                'PT-03': 'Braga',
+                'PT-04': 'Braganca',
+                'PT-05': 'Castelo Branco',
+                'PT-06': 'Coimbra',
+                'PT-07': 'Evora',
+                'PT-08': 'Faro',
+                'PT-09': 'Guarda',
+                'PT-10': 'Leiria',
+                'PT-11': 'Lisboa',
+                'PT-12': 'Portalegre',
+                'PT-13': 'Porto',
+                'PT-14': 'Santarem',
+                'PT-15': 'Setubal',
+                'PT-16': 'Viana do Castelo',
+                'PT-17': 'Vila Real',
+                'PT-18': 'Viseu',
+                'PT-20': 'Azores',
+                'PT-30': 'Madeira',
+            }
+            if code and code in pt_iso:
+                region = pt_iso[code]
+
+        # Step 3: prefer state/region fields if they correspond to a known district
+        if not region:
+            def _norm(s: str | None) -> str:
+                return _normalize_name(s or '')
+
+            known = { _norm(n): n for n in [
+                'Aveiro','Beja','Braga','Braganca','Castelo Branco','Coimbra','Evora','Faro','Guarda',
+                'Leiria','Lisboa','Portalegre','Porto','Santarem','Setubal','Viana do Castelo','Vila Real','Viseu',
+                'Azores','Madeira'
+            ] }
+            for cand in [address.get('state'), address.get('region'), address.get('autonomous_region')]:
+                if _norm(cand) in known:
+                    region = known[_norm(cand)]
+                    break
+
+        # Step 4: only use county if it matches a known district (avoid municipalities like Ovar)
+        if not region:
+            county = address.get('county')
+            norm_county = _normalize_name(county or '')
+            if 'known' in locals() and norm_county in known:
+                region = known[norm_county]
+
+        # Province: local administrative area
         province = (
-            address.get('district')
-            or address.get('state_district')
-            or address.get('county')  # sometimes county holds district-like info
+            address.get('municipality')
+            or address.get('city')
+            or address.get('town')
+            or address.get('village')
         )
-        region = (
-            address.get('region')
-            or address.get('state')
-            or address.get('autonomous_region')
-        )
-        # Fallback: if still no region but province present, use province as region label
-        if not region and province:
-            region = province
     elif cc == 'fr':
         # France: region in state; department in county/state_district
         region = address.get('state') or address.get('region')
@@ -157,26 +216,18 @@ def _detect_country_codes(q: str) -> str | None:
 
 
 def _parse_street_city_country(query: str) -> tuple[str | None, str | None, str | None]:
-    # Heuristic: split on commas, join numeric token with street
     parts = [p.strip() for p in query.split(',') if p.strip()]
     if not parts:
         return None, None, None
-    street = parts[0]
-    city = None
-    country = None
-    # If second token looks like a house number, append to street
-    if len(parts) >= 2 and re.fullmatch(r"\d+[A-Za-z]?", parts[1]):
-        street = f"{street} {parts[1]}"
-        if len(parts) >= 3:
-            city = parts[2]
-        if len(parts) >= 4:
-            country = parts[-1]
-    else:
-        if len(parts) >= 2:
-            city = parts[1]
-        if len(parts) >= 3:
-            country = parts[-1]
-    return street, city, country
+    if len(parts) >= 3:
+        country = parts[-1]
+        city = parts[-2]
+        street = ', '.join(parts[:-2]).strip() or None
+        return street, city, country
+    if len(parts) == 2:
+        street, city = parts[0], parts[1]
+        return street, city, None
+    return parts[0], None, None
 
 
 def geocode_address(query: str, return_raw: bool = False) -> dict:
@@ -226,12 +277,35 @@ def geocode_address(query: str, return_raw: bool = False) -> dict:
                 'Accept-Language': config('GEOCODER_ACCEPT_LANGUAGE', default='es,en,pt,fr')
             }
             countrycodes = _detect_country_codes(query)
+            # Track whether we fell back to a city centroid and why
+            used_city_fallback = False
+            fallback_message = None
             params = {'q': query, 'format': 'json', 'limit': 1, 'addressdetails': 1}
             if countrycodes:
                 params['countrycodes'] = countrycodes
             resp = requests.get(url, params=params, headers=headers, timeout=10)
             resp.raise_for_status()
             arr = resp.json()
+            # If free-text result exists but city mismatches, prefer city+country fallback
+            if arr:
+                try:
+                    street, city, country = _parse_street_city_country(query)
+                    if city or country:
+                        cand_addr = (arr[0].get('address') or {}) if isinstance(arr, list) and arr else {}
+                        cand_city = cand_addr.get('city') or cand_addr.get('town') or cand_addr.get('municipality') or cand_addr.get('village')
+                        if city and cand_city and _normalize_name(cand_city) != _normalize_name(city):
+                            sparams_fix = {'format': 'json', 'limit': 1, 'addressdetails': 1, 'city': city or '', 'country': country or ''}
+                            if countrycodes:
+                                sparams_fix['countrycodes'] = countrycodes
+                            resp_fix = requests.get(url, params=sparams_fix, headers=headers, timeout=10)
+                            resp_fix.raise_for_status()
+                            arr_fix = resp_fix.json()
+                            if arr_fix:
+                                arr = arr_fix
+                                used_city_fallback = True
+                                fallback_message = 'Street mismatch; using city centroid'
+                except Exception:
+                    pass
             # Fallback: normalized query if nothing found
             if not arr:
                 q2 = _normalize_query(query)
@@ -239,6 +313,26 @@ def geocode_address(query: str, return_raw: bool = False) -> dict:
                 resp = requests.get(url, params=params, headers=headers, timeout=10)
                 resp.raise_for_status()
                 arr = resp.json()
+                # If free-text result mismatches requested city, prefer city+country fallback
+                if arr:
+                    try:
+                        street, city, country = _parse_street_city_country(query)
+                        if city or country:
+                            cand_addr = (arr[0].get('address') or {}) if isinstance(arr, list) and arr else {}
+                            cand_city = cand_addr.get('city') or cand_addr.get('town') or cand_addr.get('municipality') or cand_addr.get('village')
+                            if city and cand_city and _normalize_name(cand_city) != _normalize_name(city):
+                                sparams2 = {'format': 'json', 'limit': 1, 'addressdetails': 1, 'city': city or '', 'country': country or ''}
+                                if countrycodes:
+                                    sparams2['countrycodes'] = countrycodes
+                                resp_fix = requests.get(url, params=sparams2, headers=headers, timeout=10)
+                                resp_fix.raise_for_status()
+                                arr2 = resp_fix.json()
+                                if arr2:
+                                    arr = arr2
+                                    used_city_fallback = True
+                                    fallback_message = 'Street mismatch; using city centroid'
+                    except Exception:
+                        pass
             # Fallback: structured search (street/city/country)
             if not arr:
                 street, city, country = _parse_street_city_country(query)
@@ -275,6 +369,21 @@ def geocode_address(query: str, return_raw: bool = False) -> dict:
                         if arr:
                             break
             if not arr:
+                # Last-resort: try city+country only to at least place the marker in the city
+                street, city, country = _parse_street_city_country(query)
+                if city or country:
+                    q3 = ", ".join([p for p in [city, country] if p])
+                    if q3:
+                        params3 = {'q': q3, 'format': 'json', 'limit': 1, 'addressdetails': 1}
+                        if countrycodes:
+                            params3['countrycodes'] = countrycodes
+                        resp3 = requests.get(url, params=params3, headers=headers, timeout=10)
+                        resp3.raise_for_status()
+                        arr = resp3.json()
+                        if arr:
+                            used_city_fallback = True
+                            fallback_message = 'Street not found; using city centroid'
+            if not arr:
                 raise GeocodingError('No results')
             first = arr[0]
             admin = _extract_es_pt_fr_from_nominatim(first.get('address', {}) or {})
@@ -284,6 +393,10 @@ def geocode_address(query: str, return_raw: bool = False) -> dict:
                 'provider': 'nominatim',
                 **admin,
             }
+            if used_city_fallback:
+                result['precision'] = 'city'
+                if fallback_message:
+                    result['message'] = fallback_message
             if return_raw:
                 result['raw'] = first
     except requests.RequestException as e:
@@ -292,3 +405,8 @@ def geocode_address(query: str, return_raw: bool = False) -> dict:
     # Cache for 24 hours
     cache.set(key, result, 24 * 3600)
     return result
+
+
+
+
+

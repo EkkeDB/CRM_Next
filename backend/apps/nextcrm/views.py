@@ -4,6 +4,7 @@ Django REST Framework views for NextCRM API.
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
+import re
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser
@@ -444,6 +445,133 @@ class CounterpartyFacilityViewSet(viewsets.ModelViewSet):
 class FacilityConsumptionViewSet(viewsets.ModelViewSet):
     queryset = FacilityConsumption.objects.select_related('facility', 'commodity').all()
     serializer_class = FacilityConsumptionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'], url_path='geo_heatmap', permission_classes=[IsAuthenticated])
+    def geo_heatmap(self, request):
+        """Aggregate facility consumptions by area to feed a heatmap.
+
+        - Portugal: group by region (district), return centroid and total yearly volume.
+        - Spain: group by region (comunidad) + province, return centroid and total yearly volume.
+
+        Optional query params:
+        - commodities: comma-separated commodity IDs to filter
+        - countries: optional filter (e.g., 'pt,es')
+        """
+        qs = self.get_queryset().filter(
+            facility__latitude__isnull=False,
+            facility__longitude__isnull=False,
+            facility__is_active=True,
+        )
+
+        # Filter by commodities if provided
+        com_param = request.query_params.get('commodities', '').strip()
+        if com_param:
+            try:
+                ids = [int(x) for x in com_param.split(',') if x.strip().isdigit()]
+                if ids:
+                    qs = qs.filter(commodity_id__in=ids)
+            except Exception:
+                pass
+
+        # Optional country filter
+        countries = request.query_params.get('countries', '').lower()
+        country_filter = None
+        if countries:
+            parts = [p.strip() for p in countries.split(',') if p.strip()]
+            if parts:
+                # Normalize to names stored in facility.country (strings like 'Portugal', 'Spain')
+                norm = set()
+                for p in parts:
+                    if p in ('pt', 'portugal'):
+                        norm.add('portugal')
+                    elif p in ('es', 'spain', 'espana', 'españa'):
+                        norm.add('spain')
+                    else:
+                        norm.add(p)
+                country_filter = list(norm)
+        if country_filter:
+            qs = qs.filter(facility__country__iregex='^(' + '|'.join([re.escape(c) for c in country_filter]) + ')$')
+
+        # Build aggregation map
+        buckets = {}
+        def cc_from_country(c: str | None) -> str | None:
+            if not c:
+                return None
+            s = (c or '').strip().lower()
+            if s in ('portugal', 'pt'):
+                return 'pt'
+            if s in ('spain', 'españa', 'espana', 'es'):
+                return 'es'
+            return None
+
+        for fc in qs:
+            fac = fc.facility
+            if fac.latitude is None or fac.longitude is None:
+                continue
+            try:
+                lat = float(fac.latitude)
+                lng = float(fac.longitude)
+            except Exception:
+                continue
+            if not (lat == lat and lng == lng):
+                continue
+            ctry_code = cc_from_country(fac.country)
+            region = (fac.region or '').strip() or None
+            province = (fac.province or '').strip() or None
+
+            if ctry_code == 'pt':
+                key = ('pt', region)
+            elif ctry_code == 'es':
+                key = ('es', region, province)
+            else:
+                # Skip countries outside PT/ES for this heatmap
+                continue
+
+            # Compute yearly volume; if missing, derive from monthly
+            yv = fc.yearly_volume
+            if yv is None and fc.monthly_volume is not None:
+                try:
+                    from decimal import Decimal
+                    yv = (fc.monthly_volume * Decimal('12')).quantize(Decimal('0.001'))
+                except Exception:
+                    yv = None
+            vol = float(yv or 0)
+            if vol <= 0:
+                continue
+
+            bucket = buckets.get(key)
+            if not bucket:
+                buckets[key] = {
+                    'country_code': ctry_code,
+                    'country': fac.country,
+                    'region': region,
+                    'province': province if ctry_code == 'es' else None,
+                    'lat_sum': lat,
+                    'lng_sum': lng,
+                    'count': 1,
+                    'volume': vol,
+                }
+            else:
+                bucket['lat_sum'] += lat
+                bucket['lng_sum'] += lng
+                bucket['count'] += 1
+                bucket['volume'] += vol
+
+        # Build response: centroid per bucket
+        resp = []
+        for k, b in buckets.items():
+            cnt = max(1, int(b['count']))
+            resp.append({
+                'country_code': b['country_code'],
+                'country': b['country'],
+                'region': b['region'],
+                'province': b['province'],
+                'lat': round(b['lat_sum'] / cnt, 6),
+                'lng': round(b['lng_sum'] / cnt, 6),
+                'volume': round(float(b['volume']), 3),
+            })
+        return Response(resp)
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['facility', 'commodity']

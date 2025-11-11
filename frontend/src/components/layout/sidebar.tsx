@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { authzApi } from '@/lib/api-client'
+import { useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { useUiPerms } from '@/hooks/use-ui-perms'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,6 +13,7 @@ import {
   Building,
   Users,
   BarChart2,
+  TrendingUp,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -39,6 +40,7 @@ const baseMenuSections = [
     title: 'Main',
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: Home },
+      { href: '/dashboard/geo', label: 'Geo Heatmap', icon: Globe },
     ]
   },
   {
@@ -81,6 +83,7 @@ const baseMenuSections = [
     title: 'System',
     items: [
       { href: '/dashboard/reports', label: 'Reports', icon: BarChart2 },
+      { href: '/dashboard/analytics', label: 'Analytics', icon: TrendingUp },
       { href: '/dashboard/settings', label: 'Settings', icon: Settings },
       { href: '/dashboard/admin/users', label: 'Users & Auth', icon: Users },
       { href: '/dashboard/admin/roles', label: 'Roles Matrix', icon: Users }
@@ -100,6 +103,16 @@ const routeToToken: Record<string, string> = {
   '/dashboard/sociedades': 'ui:sociedades',
   '/dashboard/trade-operation-types': 'ui:trade_operations',
   '/dashboard/reports': 'ui:reports',
+  '/dashboard/analytics': 'ui:analytics',
+  '/dashboard/geo': 'ui:analytics',
+  '/dashboard/commodity-groups': 'ui:commodity_groups',
+  '/dashboard/commodity-types': 'ui:commodity_types',
+  '/dashboard/commodity-subtypes': 'ui:commodity_subtypes',
+  '/dashboard/commodities': 'ui:commodities',
+  '/dashboard/icoterms': 'ui:icoterms',
+  '/dashboard/delivery-formats': 'ui:delivery_formats',
+  '/dashboard/additives': 'ui:additives',
+  '/dashboard/analytics': 'ui:analytics',
   '/dashboard/admin/roles': 'ui:roles',
   '/dashboard/admin/users': 'ui:users',
 }
@@ -107,17 +120,7 @@ const routeToToken: Record<string, string> = {
 export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useAuth()
-  const [perms, setPerms] = useState<string[] | null>(null)
-
-  useEffect(() => {
-    let mounted = true
-    authzApi.simulate().then((res:any) => {
-      if (!mounted) return
-      const p = (res?.policy?.permissions || []) as string[]
-      setPerms(p)
-    }).catch(()=> setPerms(null))
-    return () => { mounted = false }
-  }, [])
+  const { loading: permsLoading, has, isSuper } = useUiPerms()
 
   return (
     <aside
@@ -140,46 +143,51 @@ export default function Sidebar({ collapsed, onCollapse }: SidebarProps) {
         </Button>
       </div>
       <nav className="flex-1 space-y-2 px-2 py-4">
-        {baseMenuSections.map((section, sectionIndex) => (
-          <div key={section.title} className="space-y-1">
-            {!collapsed && (
-              <div className="px-3 py-2">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {section.title}
-                </h3>
-              </div>
-            )}
-            {collapsed && sectionIndex > 0 && (
-              <div className="my-2 border-t border-border" />
-            )}
-            {section.items
-              .filter(item => {
-                // show all while loading perms or if user is superuser
-                if (!perms || user?.is_superuser) return true
-                const token = routeToToken[item.href] || ''
-                return token ? perms.includes(token) : true
-              })
-              .map(item => {
-              const active = pathname === item.href
-              const Icon = item.icon
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted transition-colors',
-                    active ? 'bg-muted text-foreground' : 'text-muted-foreground'
-                  )}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
-                </Link>
-              )
-            })}
-          </div>
-        ))}
+        {baseMenuSections.map((section, sectionIndex) => {
+          const filteredItems = section.items.filter(item => {
+            const token = routeToToken[item.href] || ''
+            if (isSuper) return true
+            if (permsLoading) return false
+            return token ? has(token) : false
+          })
+          if (filteredItems.length === 0) return null
+          return (
+            <div key={section.title} className="space-y-1">
+              {!collapsed && (
+                <div className="px-3 py-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {section.title}
+                  </h3>
+                </div>
+              )}
+              {collapsed && sectionIndex > 0 && (
+                <div className="my-2 border-t border-border" />
+              )}
+              {filteredItems.map(item => {
+                const active = pathname === item.href
+                const Icon = item.icon
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted transition-colors',
+                      active ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                    )}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                )
+              })}
+            </div>
+          )
+        })}
       </nav>
     </aside>
   )
 }
+
+
+
